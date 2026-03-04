@@ -580,7 +580,7 @@ export default function App() {
               <select value={editModal.status} onChange={e => setEditModal({...editModal, status: e.target.value})} className="w-full p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"><option value="scheduled">판매예정</option><option value="onSale">판매중</option><option value="soldOut">품절</option><option value="completed">판매종료</option></select>
               <div className="flex gap-2"><input type="date" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} className="flex-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"/><input type="time" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} className="flex-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"/></div>
             </div>
-            <div className="flex justify-end gap-2"><button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button><button onClick={handleConfirmEdit} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg">수정 저장</button></div>
+            <div className="flex justify-end gap-2"><button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button><button onClick={handleConfirmEdit} className="px-4 py-2 bg-blue-600 text-blue font-bold rounded-lg">수정 저장</button></div>
           </div>
         </div>
       )}
