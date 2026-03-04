@@ -500,7 +500,7 @@ export default function App() {
                     {isDatePickerOpen && (
                       <div className="p-4 border rounded-lg mt-2 bg-white shadow-inner space-y-3">
                         <div className="flex gap-2"><input type="date" value={pickerDate} onChange={e => setPickerDate(e.target.value)} className="flex-1 p-2 border rounded outline-none"/><input type="time" value={pickerTime} onChange={e => setPickerTime(e.target.value)} className="flex-1 p-2 border rounded outline-none"/></div>
-                        <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsDatePickerOpen(false)} className="text-sm px-3 py-1 bg-gray-100 rounded">취소</button><button type="button" onClick={handleConfirmDatePicker} className="text-sm px-3 py-1 bg-blue-600 text-white rounded font-bold">확정</button></div>
+                        <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsDatePickerOpen(false)} className="text-sm px-3 py-1 bg-gray-100 rounded">취소</button><button type="button" onClick={handleConfirmDatePicker} className="text-sm px-3 py-1 bg-blue-600 text-blue rounded font-bold">확정</button></div>
                       </div>
                     )}
                   </div>
