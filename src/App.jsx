@@ -504,7 +504,7 @@ export default function App() {
                       </div>
                     )}
                   </div>
-                  <button type="submit" className="w-full py-3 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700">예약 전송하기</button>
+                  <button type="submit" className="w-full py-3 bg-blue-600 text-blue font-bold rounded-lg hover:bg-blue-700">예약 전송하기</button>
                 </form>
               </div>
 
