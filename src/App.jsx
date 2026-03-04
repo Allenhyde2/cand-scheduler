@@ -390,7 +390,7 @@ export default function App() {
                 required 
               />
             </div>
-            <button type="submit" className="w-full backgroundColor:'#2563eb' bg-blue-600 text-blue font-bold py-3 rounded-lg hover:bg-blue-700">접속하기</button>
+            <button type="submit" style={{ backgroundColor: '#2563eb' }} className="w-full text-white font-bold py-3 rounded-lg hover:opacity-90">접속하기</button>
           </form>
         </div>
       </div>
