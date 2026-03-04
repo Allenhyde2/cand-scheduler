@@ -567,7 +567,7 @@ export default function App() {
               <p><b>상품:</b> {products.find(p => p.id === scheduleForm.productId)?.name}</p>
               <p><b>실행:</b> {new Date(confirmedDateTime).toLocaleString()}</p>
             </div>
-            <div className="flex justify-end gap-2"><button onClick={() => setIsConfirmModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button><button onClick={handleConfirmRegister} className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg">등록 확정</button></div>
+            <div className="flex justify-end gap-2"><button onClick={() => setIsConfirmModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button><button onClick={handleConfirmRegister} className="px-4 py-2 bg-blue-600 text-blue font-bold rounded-lg">등록 확정</button></div>
           </div>
         </div>
       )}
