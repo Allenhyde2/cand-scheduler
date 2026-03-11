@@ -175,7 +175,7 @@ export default function App() {
 
     const redirectUri = `${window.location.origin}/canpass/callback`;
 
-    // ⭐️ 수정됨: 인증 주소 파라미터에 'scope' 항목 추가
+    // ⭐️ 수정됨: 문제의 원인이었던 scope 파라미터를 완전히 제거했습니다!
     const authUrl = new URL('https://canpass.me/oauth2/authorize');
     authUrl.search = new URLSearchParams({
       response_type: 'code',
@@ -185,8 +185,8 @@ export default function App() {
       code_challenge_method: 'S256',
       redirect_uri: redirectUri,
       community_id: DEFAULT_GROUP_ID,
-      state: state,
-      scope: SCOPES 
+      state: state
+      // scope 파라미터 삭제됨 (에러 원인 제거)
     }).toString();
 
     window.location.href = authUrl.toString();
