@@ -78,7 +78,8 @@ export default function App() {
 
       if (error) {
         showToast(`로그인 취소/실패: ${urlParams.get('error_description')}`, 'error');
-        window.history.replaceState({}, document.title, window.location.pathname);
+        // 에러 시 주소창을 깨끗하게 정리합니다 (기본 경로로 이동)
+        window.history.replaceState({}, document.title, '/');
         return;
       }
 
@@ -86,7 +87,6 @@ export default function App() {
         setIsLoginProcessing(true);
         const savedState = sessionStorage.getItem('oauth_state');
         const codeVerifier = sessionStorage.getItem('oauth_verifier');
-        // 로그인 창에서 수동으로 입력해두었던 판매자 ID를 불러옵니다.
         const savedSellerId = localStorage.getItem('cand_seller_id');
 
         if (stateParam !== savedState) {
@@ -115,7 +115,6 @@ export default function App() {
           const data = await res.json();
           const accessToken = data.access_token;
           
-          // API에서 받은 user_id를 무시하고, 사용자가 입력했던 진짜 셀러 아이디를 사용합니다.
           const loggedInSellerId = savedSellerId || '';
 
           setToken(accessToken);
@@ -132,7 +131,8 @@ export default function App() {
           showToast(`로그인 처리 중 오류 발생: ${err.message}`, 'error');
         } finally {
           setIsLoginProcessing(false);
-          window.history.replaceState({}, document.title, window.location.pathname);
+          // 성공 후 주소창을 깔끔하게 '/' 로 돌려놓습니다 (/canpass/callback 경로를 지움)
+          window.history.replaceState({}, document.title, '/');
           sessionStorage.removeItem('oauth_state');
           sessionStorage.removeItem('oauth_verifier');
         }
@@ -156,13 +156,11 @@ export default function App() {
     e.preventDefault();
     const cleanSellerId = sellerId.trim();
 
-    // 판매자 아이디 수동 검증 부활
     if (!cleanSellerId) {
       showToast('판매자 ID를 먼저 입력해주세요.', 'error');
       return;
     }
 
-    // 캔패스 로그인 다녀온 뒤에 필터링으로 쓸 수 있게 로컬스토리지에 수동 입력값 저장
     localStorage.setItem('cand_seller_id', cleanSellerId);
 
     const codeVerifier = createCodeVerifier();
@@ -172,7 +170,8 @@ export default function App() {
     sessionStorage.setItem('oauth_verifier', codeVerifier);
     sessionStorage.setItem('oauth_state', state);
 
-    const redirectUri = window.location.origin;
+    // ⭐️ 핵심 수정 부분: 백엔드에 등록된 URI 규칙과 정확히 동일하게 /canpass/callback 을 붙여서 보냅니다.
+    const redirectUri = `${window.location.origin}/canpass/callback`;
 
     const authUrl = new URL('https://canpass.me/oauth2/authorize');
     authUrl.search = new URLSearchParams({
@@ -446,7 +445,6 @@ export default function App() {
                 className="w-full px-4 py-2 border rounded-lg bg-gray-200 text-gray-500 cursor-not-allowed outline-none" 
               />
             </div>
-            {/* 판매자 ID 수동 입력 필드 부활 */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">판매자 ID (Seller ID)</label>
               <input 
