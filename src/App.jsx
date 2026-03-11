@@ -3,12 +3,17 @@ import React, { useState, useEffect } from 'react';
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const API_BASE_URL = 'https://api.cand.xyz'; 
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
+const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; // 발급받으신 캔패스 Client ID
+
+// --- PKCE 인증을 위한 난수 생성 함수 (캔패스 공식 문서 기반) ---
+const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
-  const [communityId] = useState(DEFAULT_GROUP_ID); // 그룹 ID는 상수로 고정
-  const [sellerId, setSellerId] = useState(''); // 판매자 ID 상태 추가
+  const [communityId] = useState(DEFAULT_GROUP_ID); 
+  const [sellerId, setSellerId] = useState(''); 
   
   const [activeTab, setActiveTab] = useState('productList'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -18,6 +23,7 @@ export default function App() {
 
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoginProcessing, setIsLoginProcessing] = useState(false);
   
   const [tasks, setTasks] = useState([]);
 
@@ -62,45 +68,132 @@ export default function App() {
     setConfirmDialog({ visible: false, message: '', onConfirm: null });
   };
 
+  // --- OAuth 로그인 콜백 처리 및 기존 세션 복구 ---
   useEffect(() => {
-    const savedToken = localStorage.getItem('cand_token');
-    const savedSellerId = localStorage.getItem('cand_seller_id');
-    const savedRecentProducts = localStorage.getItem('cand_recent_products');
-    
-    if (savedToken) setToken(savedToken);
-    if (savedSellerId) setSellerId(savedSellerId);
-    if (savedRecentProducts) {
-      try {
-        setRecentProducts(JSON.parse(savedRecentProducts));
-      } catch(e) {}
-    }
+    const handleOAuthCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const stateParam = urlParams.get('state');
+      const error = urlParams.get('error');
+
+      if (error) {
+        showToast(`로그인 취소/실패: ${urlParams.get('error_description')}`, 'error');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+
+      if (code && stateParam) {
+        setIsLoginProcessing(true);
+        const savedState = sessionStorage.getItem('oauth_state');
+        const codeVerifier = sessionStorage.getItem('oauth_verifier');
+        // 로그인 창에서 수동으로 입력해두었던 판매자 ID를 불러옵니다.
+        const savedSellerId = localStorage.getItem('cand_seller_id');
+
+        if (stateParam !== savedState) {
+          showToast('비정상적인 로그인 접근입니다.', 'error');
+          setIsLoginProcessing(false);
+          return;
+        }
+
+        try {
+          const res = await fetch('https://canpass.me/oauth2/token', {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+              grant_type: 'authorization_code',
+              client_id: CLIENT_ID,
+              code: code,
+              code_verifier: codeVerifier
+            })
+          });
+
+          if (!res.ok) {
+            const errData = await res.json();
+            throw new Error(errData.error_description || '토큰 발급 실패');
+          }
+
+          const data = await res.json();
+          const accessToken = data.access_token;
+          
+          // API에서 받은 user_id를 무시하고, 사용자가 입력했던 진짜 셀러 아이디를 사용합니다.
+          const loggedInSellerId = savedSellerId || '';
+
+          setToken(accessToken);
+          setSellerId(loggedInSellerId);
+          setIsAuthenticated(true);
+          localStorage.setItem('cand_token', accessToken);
+          localStorage.setItem('cand_seller_id', loggedInSellerId);
+
+          fetchProductsWithArgs(accessToken, DEFAULT_GROUP_ID, loggedInSellerId);
+          fetchScheduledTasks(accessToken, DEFAULT_GROUP_ID);
+          showToast('캔패스 로그인이 완료되었습니다.', 'success');
+
+        } catch (err) {
+          showToast(`로그인 처리 중 오류 발생: ${err.message}`, 'error');
+        } finally {
+          setIsLoginProcessing(false);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          sessionStorage.removeItem('oauth_state');
+          sessionStorage.removeItem('oauth_verifier');
+        }
+      } 
+      else {
+        const savedSellerId = localStorage.getItem('cand_seller_id');
+        const savedRecentProducts = localStorage.getItem('cand_recent_products');
+        
+        if (savedSellerId) setSellerId(savedSellerId);
+        if (savedRecentProducts) {
+          try { setRecentProducts(JSON.parse(savedRecentProducts)); } catch(e) {}
+        }
+      }
+    };
+
+    handleOAuthCallback();
   }, []);
 
-  const handleLogin = (e) => {
+  // --- 캔패스 로그인 버튼 클릭 시 실행 ---
+  const handleOAuthLogin = async (e) => {
     e.preventDefault();
-    const cleanToken = token.trim();
     const cleanSellerId = sellerId.trim();
 
-    if (!cleanToken || !cleanSellerId) {
-      showToast('토큰과 판매자 ID를 모두 입력해주세요.', 'error');
+    // 판매자 아이디 수동 검증 부활
+    if (!cleanSellerId) {
+      showToast('판매자 ID를 먼저 입력해주세요.', 'error');
       return;
     }
-    
-    setToken(cleanToken);
-    setSellerId(cleanSellerId);
-    localStorage.setItem('cand_token', cleanToken);
+
+    // 캔패스 로그인 다녀온 뒤에 필터링으로 쓸 수 있게 로컬스토리지에 수동 입력값 저장
     localStorage.setItem('cand_seller_id', cleanSellerId);
-    
-    setIsAuthenticated(true);
-    // 로그인 시 현재의 ID 정보를 명시적으로 넘겨줍니다.
-    fetchProductsWithArgs(cleanToken, communityId, cleanSellerId);
-    fetchScheduledTasks(cleanToken, communityId); 
-    showToast('시스템에 접속했습니다.', 'success');
+
+    const codeVerifier = createCodeVerifier();
+    const codeChallenge = await createCodeChallenge(codeVerifier);
+    const state = JSON.stringify({ nonce: Math.random().toString(), key: 'cand-admin' });
+
+    sessionStorage.setItem('oauth_verifier', codeVerifier);
+    sessionStorage.setItem('oauth_state', state);
+
+    const redirectUri = window.location.origin;
+
+    const authUrl = new URL('https://canpass.me/oauth2/authorize');
+    authUrl.search = new URLSearchParams({
+      response_type: 'code',
+      action: 'signin',
+      client_id: CLIENT_ID,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      redirect_uri: redirectUri,
+      community_id: DEFAULT_GROUP_ID,
+      state: state
+    }).toString();
+
+    window.location.href = authUrl.toString();
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setActiveTab('productList');
+    setToken('');
+    localStorage.removeItem('cand_token');
   };
 
   const getAuthHeaders = (currentToken, currentCommunityId) => ({
@@ -136,7 +229,6 @@ export default function App() {
     }
   };
 
-  // API 호출 방식은 기존과 100% 동일하게 유지하고 프론트엔드 단에서만 필터링합니다.
   const fetchProductsWithArgs = async (currentToken, currentCommunityId, currentSellerId) => {
     setIsLoading(true);
     try {
@@ -146,29 +238,16 @@ export default function App() {
       if (!res.ok) throw new Error(`API 오류: ${res.status}`);
       const data = await res.json();
       
-      // 1. 데이터 구조 안전장치 (data.data, data.items 등 다양한 API 응답 형태 지원)
       const allProducts = Array.isArray(data) ? data : 
                           (Array.isArray(data?.data) ? data.data : 
                           (Array.isArray(data?.items) ? data.items : []));
       
-      // ⭐️ 디버깅을 위해 콘솔에 실제 서버에서 받은 원본 데이터를 출력합니다.
-      console.log("📦 서버에서 받은 전체 상품 목록:", allProducts);
-
-      // ID는 대소문자를 구분할 수 있으므로, toLowerCase() 없이 공백만 제거하여 엄격하게 비교합니다.
       const targetSellerId = String(currentSellerId || sellerId).trim();
 
-      // 2. [프론트엔드 필터링] 받아온 전체 데이터 중 해당 판매자의 상품만 걸러냅니다.
       const myProducts = allProducts.filter(p => {
-        // 제공해주신 API 문서 구조에 맞게 sellerId를 우선적으로 매칭합니다.
         const pSellerId = String(p.sellerId || p.userId || '').trim(); 
         return pSellerId === targetSellerId;
       });
-
-      // 만약 전체 상품은 있는데 내 상품으로 걸러진 게 0개라면 경고를 띄웁니다.
-      if (allProducts.length > 0 && myProducts.length === 0) {
-        console.warn(`⚠️ 필터링 결과 0건입니다. 입력한 아이디: "${targetSellerId}"`);
-        console.warn(`참고용 첫번째 상품의 sellerId: "${allProducts[0]?.sellerId}"`);
-      }
 
       setProducts(myProducts);
       showToast('해당 판매자의 상품 목록을 불러왔습니다.', 'success');
@@ -336,14 +415,13 @@ export default function App() {
     return m[s] || s;
   };
 
-  // [프론트엔드 필터링] 예약 목록 중에서, 현재 내 상품 목록(products)에 매칭되는 것들만 화면에 노출합니다. (문자열 강제 변환으로 에러 방지)
   const displayedTasks = tasks.filter(task => products.some(p => String(p.id) === String(task.productId)));
 
   const CustomUI = () => (
     <div>
       {toast.visible && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
-          <div className="px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm font-bold text-white bg-gray-800">{toast.message}</div>
+          <div className="px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm font-bold text-white" style={{ backgroundColor: '#1f2937' }}>{toast.message}</div>
         </div>
       )}
     </div>
@@ -354,11 +432,11 @@ export default function App() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <CustomUI />
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-          <div className="bg-blue-600 p-8 text-center border-b-4 border-blue-700">
+          <div className="p-8 text-center border-b-4 border-blue-700" style={{ backgroundColor: '#2563eb' }}>
             <h1 className="text-2xl font-bold text-white mb-2">canD Admin</h1>
             <p className="text-blue-100 text-sm">서비스 관리를 위해 로그인해주세요.</p>
           </div>
-          <form onSubmit={handleLogin} className="p-8 space-y-6">
+          <form onSubmit={handleOAuthLogin} className="p-8 space-y-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Group ID (고정)</label>
               <input 
@@ -368,29 +446,29 @@ export default function App() {
                 className="w-full px-4 py-2 border rounded-lg bg-gray-200 text-gray-500 cursor-not-allowed outline-none" 
               />
             </div>
+            {/* 판매자 ID 수동 입력 필드 부활 */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">판매자 ID (Seller ID)</label>
               <input 
                 type="text" 
                 value={sellerId} 
                 onChange={e => setSellerId(e.target.value)} 
-                placeholder="ex) user123" 
+                placeholder="ex) CS:P8XLJRM3" 
                 className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" 
                 required 
               />
             </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Bearer Token</label>
-              <input 
-                type="password" 
-                value={token} 
-                onChange={e => setToken(e.target.value)} 
-                placeholder="Access Token" 
-                className="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500" 
-                required 
-              />
-            </div>
-            <button type="submit" style={{ backgroundColor: '#2563eb' }} className="w-full text-white font-bold py-3 rounded-lg hover:opacity-90">접속하기</button>
+            <button 
+              type="submit" 
+              disabled={isLoginProcessing}
+              className="w-full text-white font-bold py-3 rounded-lg hover:opacity-90 transition-opacity flex justify-center items-center gap-2 disabled:opacity-50"
+              style={{ backgroundColor: '#2563eb' }}
+            >
+              {isLoginProcessing ? '인증 처리 중...' : 'CANpass로 로그인'}
+            </button>
+            <p className="text-xs text-center text-gray-400 mt-2">
+              버튼을 누르면 토큰 발급을 위해 CANpass 인증 페이지로 이동합니다.
+            </p>
           </form>
         </div>
       </div>
@@ -402,14 +480,14 @@ export default function App() {
       <CustomUI />
       <aside className={`${isSidebarOpen ? 'w-64' : 'w-0 hidden'} flex-shrink-0 bg-white border-r border-gray-200 transition-all duration-300 flex flex-col`}>
         <div className="h-16 border-b border-gray-100 flex items-center justify-center shrink-0">
-          <span className="text-xl font-bold">Admin<span className="text-blue-600">Dash</span></span>
+          <span className="text-xl font-bold">Admin<span style={{ color: '#2563eb' }}>Dash</span></span>
         </div>
         <nav className="flex-1 py-4 px-3 space-y-1">
-          <button onClick={() => setActiveTab('productList')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm ${activeTab === 'productList' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>상품 목록</button>
-          <button onClick={() => setActiveTab('schedule')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-600 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>상태 예약</button>
+          <button onClick={() => setActiveTab('productList')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm ${activeTab === 'productList' ? 'font-bold' : 'text-gray-600 hover:bg-gray-50'}`} style={activeTab === 'productList' ? { backgroundColor: '#eff6ff', color: '#2563eb' } : {}}>상품 목록</button>
+          <button onClick={() => setActiveTab('schedule')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm ${activeTab === 'schedule' ? 'font-bold' : 'text-gray-600 hover:bg-gray-50'}`} style={activeTab === 'schedule' ? { backgroundColor: '#eff6ff', color: '#2563eb' } : {}}>상태 예약</button>
           
           <div className="mt-8 border-t pt-4">
-             <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm ${activeTab === 'settings' ? 'bg-gray-100 text-gray-900 font-bold' : 'text-gray-600 hover:bg-gray-50'}`}>설정 정보</button>
+             <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm ${activeTab === 'settings' ? 'text-gray-900 font-bold' : 'text-gray-600 hover:bg-gray-50'}`} style={activeTab === 'settings' ? { backgroundColor: '#f3f4f6' } : {}}>설정 정보</button>
           </div>
 
           <button onClick={handleLogout} className="w-full text-left px-4 py-2.5 text-sm text-gray-400 hover:text-red-500 mt-10">로그아웃</button>
@@ -428,7 +506,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2">
             <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1 rounded-md border">Seller: {sellerId}</span>
-            <span className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1 rounded-md border border-blue-200">PRODUCTION</span>
+            <span className="text-xs font-bold px-3 py-1 rounded-md border border-blue-200" style={{ backgroundColor: '#eff6ff', color: '#1d4ed8' }}>PRODUCTION</span>
           </div>
         </header>
 
@@ -437,7 +515,7 @@ export default function App() {
             <div className="max-w-6xl mx-auto bg-white p-6 rounded-xl shadow-sm border">
               <div className="flex justify-between mb-6">
                 <h3 className="text-lg font-semibold">나의 상품 현황</h3>
-                <button onClick={fetchProducts} disabled={isLoading} className="px-4 py-2 bg-gray-100 rounded-lg text-sm">새로고침</button>
+                <button onClick={fetchProducts} disabled={isLoading} className="px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200 transition-colors">새로고침</button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse">
@@ -451,7 +529,11 @@ export default function App() {
                       products.map(p => (
                         <tr key={p.id} className="hover:bg-gray-50 text-sm">
                           <td className="p-4"><div><b>{p.name}</b></div><div className="text-xs text-gray-400 font-mono">{p.id}</div></td>
-                          <td className="p-4 text-center"><span className={`px-2 py-1 rounded-full text-xs font-bold ${p.status === 'onSale' ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>{translateStatus(p.status)}</span></td>
+                          <td className="p-4 text-center">
+                            <span className="px-2 py-1 rounded-full text-xs font-bold" style={p.status === 'onSale' ? { backgroundColor: '#dcfce7', color: '#15803d' } : { backgroundColor: '#f3f4f6', color: '#374151' }}>
+                              {translateStatus(p.status)}
+                            </span>
+                          </td>
                           <td className="p-4 text-center">{p.isDisplayed ? '진열중' : '숨김'}</td>
                         </tr>
                       ))
@@ -473,7 +555,7 @@ export default function App() {
                     {isProductSelectOpen && filteredProducts.length > 0 && (
                       <div className="absolute left-0 right-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-20 max-h-48 overflow-y-auto">
                         {filteredProducts.map(p => (
-                          <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left p-3 hover:bg-blue-50 text-sm border-b last:border-0">
+                          <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left p-3 text-sm border-b last:border-0 hover:bg-gray-50" style={scheduleForm.productId === p.id ? { backgroundColor: '#eff6ff' } : {}}>
                             <b>{p.name}</b> <span className="text-xs text-gray-400 ml-2">{p.id}</span>
                           </button>
                         ))}
@@ -500,21 +582,26 @@ export default function App() {
                     {isDatePickerOpen && (
                       <div className="p-4 border rounded-lg mt-2 bg-white shadow-inner space-y-3">
                         <div className="flex gap-2"><input type="date" value={pickerDate} onChange={e => setPickerDate(e.target.value)} className="flex-1 p-2 border rounded outline-none"/><input type="time" value={pickerTime} onChange={e => setPickerTime(e.target.value)} className="flex-1 p-2 border rounded outline-none"/></div>
-                        <div className="flex justify-end gap-2"><button type="button" onClick={() => setIsDatePickerOpen(false)} className="text-sm px-3 py-1 bg-gray-100 rounded">취소</button><button type="submit" style={{ backgroundColor: '#2563eb' }} className="w-full text-white font-bold py-3 rounded-lg hover:opacity-90">확정</button></div>
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => setIsDatePickerOpen(false)} className="text-sm px-3 py-1 bg-gray-100 rounded">취소</button>
+                          <button type="button" onClick={handleConfirmDatePicker} className="text-sm px-3 py-1 text-white rounded font-bold hover:opacity-90" style={{ backgroundColor: '#2563eb' }}>확정</button>
+                        </div>
                       </div>
                     )}
                   </div>
-                  <button type="submit" style={{ backgroundColor: '#2563eb' }} className="w-full text-white font-bold py-3 rounded-lg hover:opacity-90">예약 전송하기</button>
+                  <button type="submit" className="w-full py-3 text-white font-bold rounded-lg hover:opacity-90 transition-opacity" style={{ backgroundColor: '#2563eb' }}>예약 전송하기</button>
                 </form>
               </div>
 
               <div className="bg-white p-6 rounded-xl shadow-sm border">
-                <div className="flex justify-between mb-4"><h3 className="text-lg font-bold">나의 진행 중인 예약</h3><button onClick={() => fetchScheduledTasks(token, communityId)} className="text-xs text-blue-600 font-bold">목록 갱신</button></div>
+                <div className="flex justify-between mb-4">
+                  <h3 className="text-lg font-bold">나의 진행 중인 예약</h3>
+                  <button onClick={() => fetchScheduledTasks(token, communityId)} className="text-xs font-bold hover:opacity-80" style={{ color: '#2563eb' }}>목록 갱신</button>
+                </div>
                 <div className="space-y-4">
-                  {/* 프론트엔드에서 필터링된 배열(displayedTasks)을 사용합니다. */}
                   {displayedTasks.length === 0 ? <div className="text-center py-10 text-gray-400 border-2 border-dashed rounded-xl text-sm">대기 중인 나의 예약이 없습니다.</div> : (
                     displayedTasks.map(t => (
-                      <div key={t.id} className="p-4 border rounded-xl bg-blue-50/20 border-blue-100 flex justify-between items-start">
+                      <div key={t.id} className="p-4 border rounded-xl border-blue-100 flex justify-between items-start" style={{ backgroundColor: '#eff6ff' }}>
                         <div>
                           <div className="font-bold mb-1">{t.productName || t.productId}</div>
                           <div className="text-xs text-gray-500">
@@ -522,8 +609,8 @@ export default function App() {
                           </div>
                         </div>
                         <div className="flex gap-2">
-                          <button onClick={() => openEditModal(t)} className="px-2 py-1 bg-white border text-xs font-bold rounded shadow-sm">수정</button>
-                          <button onClick={() => handleDeleteTask(t)} className="px-2 py-1 bg-white border border-red-100 text-red-500 text-xs font-bold rounded shadow-sm">삭제</button>
+                          <button onClick={() => openEditModal(t)} className="px-2 py-1 bg-white border text-xs font-bold rounded shadow-sm hover:bg-gray-50">수정</button>
+                          <button onClick={() => handleDeleteTask(t)} className="px-2 py-1 bg-white border border-red-100 text-xs font-bold rounded shadow-sm hover:bg-red-50" style={{ color: '#ef4444' }}>삭제</button>
                         </div>
                       </div>
                     ))
@@ -543,7 +630,7 @@ export default function App() {
                  </div>
                  <div>
                    <label className="block text-gray-500 font-bold mb-1">AWS 스케줄러(Lambda) API 주소</label>
-                   <input type="text" readOnly value={SCHEDULER_API_URL} className="w-full bg-blue-50 border border-blue-200 p-2.5 rounded text-blue-900 font-mono font-bold outline-none" />
+                   <input type="text" readOnly value={SCHEDULER_API_URL} className="w-full border border-blue-200 p-2.5 rounded font-mono font-bold outline-none" style={{ backgroundColor: '#eff6ff', color: '#1e3a8a' }} />
                  </div>
                  <div className="pt-4 border-t border-gray-100">
                    <label className="block text-gray-500 font-bold mb-1">현재 접속 그룹 ID</label>
@@ -552,6 +639,10 @@ export default function App() {
                  <div className="pt-4 border-t border-gray-100">
                    <label className="block text-gray-500 font-bold mb-1">현재 접속 판매자 ID</label>
                    <input type="text" readOnly value={sellerId} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded font-mono text-gray-600 outline-none" />
+                 </div>
+                 <div className="pt-4 border-t border-gray-100">
+                   <label className="block text-gray-500 font-bold mb-1">CANpass Client ID</label>
+                   <input type="text" readOnly value={CLIENT_ID} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded font-mono text-gray-600 outline-none" />
                  </div>
                </div>
              </div>
@@ -567,7 +658,10 @@ export default function App() {
               <p><b>상품:</b> {products.find(p => p.id === scheduleForm.productId)?.name}</p>
               <p><b>실행:</b> {new Date(confirmedDateTime).toLocaleString()}</p>
             </div>
-            <div className="flex justify-end gap-2"><button onClick={() => setIsConfirmModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button><button onClick={handleConfirmRegister} className="px-4 py-2 bg-blue-600 text-blue font-bold rounded-lg">등록 확정</button></div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setIsConfirmModalOpen(false)} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button>
+              <button onClick={handleConfirmRegister} className="px-4 py-2 text-white font-bold rounded-lg hover:opacity-90" style={{ backgroundColor: '#2563eb' }}>등록 확정</button>
+            </div>
           </div>
         </div>
       )}
@@ -589,9 +683,15 @@ export default function App() {
                   <option value="false">진열안함 (숨김)</option>
                 </select>
               </div>
-              <div className="flex gap-2"><input type="date" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} className="flex-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"/><input type="time" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} className="flex-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"/></div>
+              <div className="flex gap-2">
+                <input type="date" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} className="flex-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"/>
+                <input type="time" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} className="flex-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500"/>
+              </div>
             </div>
-            <div className="flex justify-end gap-2"><button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button><button onClick={handleConfirmEdit} className="px-4 py-2 bg-blue-600 text-blue font-bold rounded-lg">수정 저장</button></div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-4 py-2 bg-gray-200 rounded-lg">취소</button>
+              <button onClick={handleConfirmEdit} className="px-4 py-2 text-white font-bold rounded-lg hover:opacity-90" style={{ backgroundColor: '#2563eb' }}>수정 저장</button>
+            </div>
           </div>
         </div>
       )}
