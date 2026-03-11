@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
 
 const DEFAULT_GROUP_ID = 'G00O7NKV9M';
-const API_BASE_URL = 'https://api.cand.xyz'; 
-const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
-const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
-// ⭐️ 캔패스에서 요구하는 필수 스코프(접근 권한)입니다.
-const SCOPES = 'user:email:read'; 
 
 // 로컬 환경인지 Vercel 배포 환경인지 감지합니다.
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+// AWS API Gateway(Serverless Scheduler) 주소
+const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
+
+// 캔패스 Client ID
+const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
+
+// ⭐️ 업데이트됨: 기존 캔패스 스코프 + 새롭게 추가된 MOIM 메시지/DM 관련 스코프 통합
+const SCOPES = 'email poll option vote addresses member:MOIM:conversation.read member:MOIM:conversation.write member:MOIM:message.read member:MOIM:message.write';
 
 // PKCE 인증용 난수 생성기
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
@@ -175,7 +179,6 @@ export default function App() {
 
     const redirectUri = `${window.location.origin}/canpass/callback`;
 
-    // ⭐️ 수정됨: 문제의 원인이었던 scope 파라미터를 완전히 제거했습니다!
     const authUrl = new URL('https://canpass.me/oauth2/authorize');
     authUrl.search = new URLSearchParams({
       response_type: 'code',
@@ -185,8 +188,8 @@ export default function App() {
       code_challenge_method: 'S256',
       redirect_uri: redirectUri,
       community_id: DEFAULT_GROUP_ID,
-      state: state
-      // scope 파라미터 삭제됨 (에러 원인 제거)
+      state: state,
+      scope: SCOPES 
     }).toString();
 
     window.location.href = authUrl.toString();
@@ -261,7 +264,6 @@ export default function App() {
 
       if (!activeToken) throw new Error("유효한 토큰이 없습니다. 다시 로그인해주세요.");
 
-      // 로컬 환경은 proxy 탑재, 배포 환경은 안전한 Vercel 서버 함수 사용
       const url = isLocalhost 
         ? '/cand-api/products?limit=100' 
         : '/api/proxy?endpoint=products&limit=100';
@@ -506,7 +508,7 @@ export default function App() {
       {toast.visible && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
           <div className="px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 text-sm font-bold text-white bg-gray-800">
-            {toast.message}
+            {typeof toast.message === 'object' ? JSON.stringify(toast.message) : String(toast.message)}
           </div>
         </div>
       )}
@@ -514,7 +516,9 @@ export default function App() {
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm">
             <h3 className="text-lg font-bold text-gray-900 mb-2">확인</h3>
-            <p className="text-gray-600 mb-6">{confirmDialog.message}</p>
+            <p className="text-gray-600 mb-6">
+              {typeof confirmDialog.message === 'object' ? JSON.stringify(confirmDialog.message) : String(confirmDialog.message)}
+            </p>
             <div className="flex justify-end gap-2">
               <button onClick={closeConfirm} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">취소</button>
               <button onClick={confirmDialog.onConfirm} className="px-4 py-2 bg-blue-600 text-white rounded-lg">확인</button>
@@ -841,7 +845,11 @@ export default function App() {
                         </div>
                         {task.logs && task.logs.length > 0 && (
                           <div className="mt-2 p-2 bg-white border border-blue-100 text-xs text-blue-800 rounded max-h-24 overflow-y-auto">
-                            {task.logs.map((log, i)=><div key={i} className="mb-0.5">{log}</div>)}
+                            {task.logs.map((log, i) => (
+                              <div key={i} className="mb-0.5">
+                                {typeof log === 'object' ? JSON.stringify(log) : String(log)}
+                              </div>
+                            ))}
                           </div>
                         )}
                         <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-blue-100/50">
@@ -876,6 +884,10 @@ export default function App() {
                  <div className="pt-4 border-t border-gray-100">
                    <label className="block text-gray-500 font-bold mb-1">현재 접속 판매자 ID</label>
                    <input type="text" readOnly value={sellerId} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded font-mono text-gray-600" />
+                 </div>
+                 <div className="pt-4 border-t border-gray-100">
+                   <label className="block text-gray-500 font-bold mb-1">CANpass Client ID</label>
+                   <input type="text" readOnly value={CLIENT_ID} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded font-mono text-gray-600" />
                  </div>
                </div>
              </div>
