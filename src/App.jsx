@@ -104,13 +104,8 @@ export default function App() {
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
 
-          // ⭐️ 최후의 수단: Vercel 도메인을 아예 하드코딩해서 절대 경로로 박아버립니다!
-          // (이렇게 하면 Vercel 내부 라우팅이나 상대 경로 오류를 원천 차단할 수 있습니다)
-          const tokenApiUrl = 'https://cand-scheduler.vercel.app/api/token';
-          
-          console.log("mba'e ryrúpa token 프록시 ojejeruréta:", tokenApiUrl); // mba'e ryrúpa debug
-
-          const res = await fetch(tokenApiUrl, {
+          // ⭐️ Vercel 라우팅 문제 해결 후, 다시 깔끔하게 /api/token 경로로 요청합니다.
+          const res = await fetch('/api/token', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
@@ -121,20 +116,17 @@ export default function App() {
             })
           });
 
-          // ⭐️ JSON 파싱 방어 코드 (강화 버전)
           const responseText = await res.text();
-          
           let data;
           try {
               data = JSON.parse(responseText);
           } catch(e) {
-              // HTML이 날아왔다면 콘솔에 쫘악 뿌려주고, 사용자에게는 보기 편한 에러를 띄웁니다.
-              console.error("🔥 CANpass Token API Error! HTML Response:", responseText);
-              throw new Error("서버 라우팅 오류! 콘솔(F12)을 확인해주세요. (HTML 응답됨)");
+              console.error("🔥 API 라우팅 에러 (JSON이 아님):", responseText);
+              throw new Error("서버에서 올바른 응답을 주지 않았습니다. API 라우팅 설정을 확인하세요.");
           }
 
           if (!res.ok) {
-             throw new Error(data.error_description || data.error || 'Token ñemoheñói ndojejapói.');
+             throw new Error(data.error_description || data.error || '토큰 발급에 실패했습니다.');
           }
 
           const accessToken = data.access_token;
@@ -218,10 +210,19 @@ export default function App() {
       const res = await fetch(url, {
         headers: getAuthHeaders(currentToken, currentCommunityId)
       });
-      if (!res.ok) throw new Error('상품 정보를 가져오지 못했습니다.');
-      const result = await res.json();
-      const list = result.data || [];
       
+      const responseText = await res.text();
+      let result;
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error("🔥 프록시 에러 (JSON이 아님):", responseText);
+        throw new Error("상품 목록을 불러오는 프록시 서버 설정에 문제가 있습니다.");
+      }
+
+      if (!res.ok) throw new Error(result.message || '상품 정보를 가져오지 못했습니다.');
+      
+      const list = result.data || [];
       const filtered = list.filter(p => (p.sellerId || p.userId) === currentSellerId);
       setProducts(filtered);
     } catch (err) {
