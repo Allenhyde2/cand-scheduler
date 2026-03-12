@@ -1,24 +1,21 @@
 import React, { useState, useEffect } from 'react';
 
-// ⭐️ 커뮤니티 아이디 수정됨
+// ⭐️ 커뮤니티 아이디 확인 완료
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const API_BASE_URL = 'https://api.cand.xyz'; 
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
 
-// ⭐️ 스코프 롤백: CANpass 인증 서버는 로그인 단계에서 이 클라이언트 ID에 대해 아래 스코프만 허용하고 있습니다.
-// (MOIM 전용 스코프를 섞어 보내면 캔패스 서버가 에러를 뿜어냅니다. 토큰 발급 후 해당 토큰으로 MOIM API를 호출해 보세요!)
+// ⭐️ 로그인 호출 시에는 캔패스 전용 스코프만 사용합니다!
 const SCOPES = 'email poll option vote addresses';
 
-// 환경 감지
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-// ⭐️ PKCE 난수 생성 로직 수정: CANpass 공식 API 문서의 코드와 완전히 100% 동일하게 맞췄습니다. (400 에러 방지)
+// PKCE 난수 생성 로직 (CANpass 공식 문서 기준)
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32)).buffer)));
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
 export default function App() {
-  // --- 상태 관리 ---
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
   const [communityId] = useState(DEFAULT_GROUP_ID); 
@@ -62,7 +59,6 @@ export default function App() {
     time: ''
   });
 
-  // --- 공통 유틸리티 ---
   const showToast = (message, type = 'info') => {
     setToast({ visible: true, message, type });
     setTimeout(() => {
@@ -79,8 +75,6 @@ export default function App() {
     'authorization': `Bearer ${currentToken || token}`,
     'x-can-community-id': currentCommunityId || communityId,
   });
-
-  // --- OAuth 및 데이터 페칭 로직 ---
 
   useEffect(() => {
     const handleOAuthCallback = async () => {
@@ -110,12 +104,11 @@ export default function App() {
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
 
-          // ⭐️ 수정됨: OAuth2 표준에 따라 redirect_uri 파라미터도 함께 전송하여 400 Bad Request를 방지합니다.
-          const res = await fetch('https://canpass.me/oauth2/token', {
+          // ⭐️ 핵심 변경점: 캔패스 서버가 아닌 우리의 안전한 '중간 서버(/api/token)'로 코드를 보냅니다!
+          const res = await fetch('/api/token', {
             method: 'POST',
-            headers: { 'content-type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              grant_type: 'authorization_code',
+            headers: { 'content-type': 'application/json' }, // Node.js 서버로 보내므로 JSON 형태 사용
+            body: JSON.stringify({
               client_id: CLIENT_ID,
               code: code,
               code_verifier: codeVerifier,
@@ -125,7 +118,7 @@ export default function App() {
 
           if (!res.ok) {
              const errData = await res.json();
-             throw new Error(errData.error_description || '토큰 발급에 실패했습니다.');
+             throw new Error(errData.error_description || errData.error || '토큰 발급에 실패했습니다.');
           }
 
           const data = await res.json();
@@ -149,7 +142,6 @@ export default function App() {
           sessionStorage.removeItem('oauth_verifier');
         }
       } else {
-        // 기존 세션 체크
         const savedToken = localStorage.getItem('cand_token');
         const savedSellerId = localStorage.getItem('cand_seller_id');
         if (savedToken && savedSellerId) {
@@ -174,7 +166,6 @@ export default function App() {
     const codeVerifier = createCodeVerifier();
     const codeChallenge = await createCodeChallenge(codeVerifier);
     
-    // btoa 방식 대신 간단하고 안전한 난수로 state 생성
     const state = JSON.stringify({ nonce: Math.random().toString(), key: 'cand-admin' });
 
     sessionStorage.setItem('oauth_verifier', codeVerifier);
@@ -205,12 +196,9 @@ export default function App() {
     showToast('로그아웃 되었습니다.');
   };
 
-  // --- API 호출 함수 (상품/태스크) ---
-
   const fetchProductsWithArgs = async (currentToken, currentCommunityId, currentSellerId) => {
     setIsLoading(true);
     try {
-      // Vercel 프록시 또는 직접 호출
       const url = isLocalhost ? '/cand-api/products?limit=100' : `/api/proxy?endpoint=products&limit=100`;
       const res = await fetch(url, {
         headers: getAuthHeaders(currentToken, currentCommunityId)
@@ -242,8 +230,6 @@ export default function App() {
       console.error(err);
     }
   };
-
-  // --- 비즈니스 로직 ---
 
   const handleSelectProduct = (product) => {
     setScheduleForm({ ...scheduleForm, productId: product.id });
@@ -299,8 +285,6 @@ export default function App() {
     const map = { scheduled: '판매예정', onSale: '판매중', soldOut: '품절', completed: '판매종료' };
     return map[s] || s;
   };
-
-  // --- UI 컴포넌트 ---
 
   const CustomUI = () => (
     <div>
