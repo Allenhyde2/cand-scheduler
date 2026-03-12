@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 // 시스템 설정값
-const DEFAULT_GROUP_ID = 'G00O7NKV9M';
+const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const API_BASE_URL = 'https://api.cand.xyz'; 
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
