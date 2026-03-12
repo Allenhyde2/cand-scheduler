@@ -1,12 +1,12 @@
 {
   "rewrites": [
     {
-      "source": "/canpass/callback",
-      "destination": "/"
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
     },
     {
       "source": "/(.*)",
-      "destination": "/"
+      "destination": "/index.html"
     }
   ]
 }
