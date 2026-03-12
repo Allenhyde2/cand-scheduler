@@ -6,8 +6,9 @@ const API_BASE_URL = 'https://api.cand.xyz';
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
 
-// ⭐️ 스코프 원복: 커뮤니티 ID가 일치하므로 MOIM 관련 스코프도 이제 정상 동작할 것입니다.
-const SCOPES = 'email poll option vote addresses member:MOIM:conversation.read member:MOIM:conversation.write member:MOIM:message.read member:MOIM:message.write';
+// ⭐️ 스코프 롤백: CANpass 인증 서버는 로그인 단계에서 이 클라이언트 ID에 대해 아래 스코프만 허용하고 있습니다.
+// (MOIM 전용 스코프를 섞어 보내면 캔패스 서버가 에러를 뿜어냅니다. 토큰 발급 후 해당 토큰으로 MOIM API를 호출해 보세요!)
+const SCOPES = 'email poll option vote addresses';
 
 // 환경 감지
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
