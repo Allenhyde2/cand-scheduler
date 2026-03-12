@@ -104,10 +104,15 @@ export default function App() {
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
 
-          // ⭐️ 핵심 변경점: 캔패스 서버가 아닌 우리의 안전한 '중간 서버(/api/token)'로 코드를 보냅니다!
-          const res = await fetch(window.location.origin + '/api/token', {
+          // ⭐️ 최후의 수단: Vercel 도메인을 아예 하드코딩해서 절대 경로로 박아버립니다!
+          // (이렇게 하면 Vercel 내부 라우팅이나 상대 경로 오류를 원천 차단할 수 있습니다)
+          const tokenApiUrl = 'https://cand-scheduler.vercel.app/api/token';
+          
+          console.log("mba'e ryrúpa token 프록시 ojejeruréta:", tokenApiUrl); // mba'e ryrúpa debug
+
+          const res = await fetch(tokenApiUrl, {
             method: 'POST',
-            headers: { 'content-type': 'application/json' }, // Node.js 서버로 보내므로 JSON 형태 사용
+            headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               client_id: CLIENT_ID,
               code: code,
@@ -116,27 +121,22 @@ export default function App() {
             })
           });
 
-        // ⭐️ 2. JSON 파싱 방어 코드 추가 구역 ⭐️
-          // 일단 서버 응답을 텍스트 형태로 그대로 가져옵니다.
+          // ⭐️ JSON 파싱 방어 코드 (강화 버전)
           const responseText = await res.text();
           
           let data;
           try {
-              // 가져온 텍스트를 JSON으로 변환 시도합니다.
               data = JSON.parse(responseText);
           } catch(e) {
-              // 파싱에 실패했다면 (예: <!doctype html> 이 날아온 경우)
-              // 콘솔에 어떤 HTML이 날아왔는지 원본을 그대로 출력해서 원인을 파악합니다.
-              console.error("서버에서 받은 응답이 JSON이 아닙니다! 응답 원본 텍스트:", responseText);
-              throw new Error("서버에서 예상치 못한 데이터(HTML 등)를 반환했습니다. 개발자 도구(F12) 콘솔을 확인해주세요.");
+              // HTML이 날아왔다면 콘솔에 쫘악 뿌려주고, 사용자에게는 보기 편한 에러를 띄웁니다.
+              console.error("🔥 CANpass Token API Error! HTML Response:", responseText);
+              throw new Error("서버 라우팅 오류! 콘솔(F12)을 확인해주세요. (HTML 응답됨)");
           }
 
-          // 3. 응답 상태가 에러인 경우
           if (!res.ok) {
-             throw new Error(data.error_description || data.error || '토큰 발급에 실패했습니다.');
+             throw new Error(data.error_description || data.error || 'Token ñemoheñói ndojejapói.');
           }
 
-          // 4. 정상적으로 토큰 추출
           const accessToken = data.access_token;
           
           setToken(accessToken);
