@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 
-// 시스템 설정값
+// ⭐️ 커뮤니티 아이디 수정됨
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const API_BASE_URL = 'https://api.cand.xyz'; 
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
 
-// ⭐️ 캔패스 전용 스코프 (검증된 값으로 롤백)
-const SCOPES = 'email poll option vote addresses';
+// ⭐️ 스코프 원복: 커뮤니티 ID가 일치하므로 MOIM 관련 스코프도 이제 정상 동작할 것입니다.
+const SCOPES = 'email poll option vote addresses member:MOIM:conversation.read member:MOIM:conversation.write member:MOIM:message.read member:MOIM:message.write';
 
 // 환경 감지
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-// PKCE 인증용 난수 생성 유틸리티
-const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+// ⭐️ PKCE 난수 생성 로직 수정: CANpass 공식 API 문서의 코드와 완전히 100% 동일하게 맞췄습니다. (400 에러 방지)
+const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32)).buffer)));
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
 export default function App() {
@@ -107,6 +107,9 @@ export default function App() {
         }
 
         try {
+          const redirectUri = `${window.location.origin}/canpass/callback`;
+
+          // ⭐️ 수정됨: OAuth2 표준에 따라 redirect_uri 파라미터도 함께 전송하여 400 Bad Request를 방지합니다.
           const res = await fetch('https://canpass.me/oauth2/token', {
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -114,11 +117,15 @@ export default function App() {
               grant_type: 'authorization_code',
               client_id: CLIENT_ID,
               code: code,
-              code_verifier: codeVerifier
+              code_verifier: codeVerifier,
+              redirect_uri: redirectUri
             })
           });
 
-          if (!res.ok) throw new Error('토큰 발급에 실패했습니다.');
+          if (!res.ok) {
+             const errData = await res.json();
+             throw new Error(errData.error_description || '토큰 발급에 실패했습니다.');
+          }
 
           const data = await res.json();
           const accessToken = data.access_token;
@@ -165,7 +172,9 @@ export default function App() {
 
     const codeVerifier = createCodeVerifier();
     const codeChallenge = await createCodeChallenge(codeVerifier);
-    const state = btoa(Math.random().toString());
+    
+    // btoa 방식 대신 간단하고 안전한 난수로 state 생성
+    const state = JSON.stringify({ nonce: Math.random().toString(), key: 'cand-admin' });
 
     sessionStorage.setItem('oauth_verifier', codeVerifier);
     sessionStorage.setItem('oauth_state', state);
@@ -183,7 +192,7 @@ export default function App() {
       community_id: DEFAULT_GROUP_ID,
       state: state,
       scope: SCOPES 
-    });
+    }).toString();
 
     window.location.href = authUrl.toString();
   };
