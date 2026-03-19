@@ -16,7 +16,6 @@ const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
-  const [manualTokenInput, setManualTokenInput] = useState(''); 
   const [communityId] = useState(DEFAULT_GROUP_ID); 
   const [sellerId, setSellerId] = useState(''); 
   
@@ -131,7 +130,6 @@ export default function App() {
     const redirectUri = `${window.location.origin}/canpass/callback`;
     const authUrl = new URL('https://canpass.me/oauth2/authorize');
     
-    // ⭐️ 새로운 SCOPES 적용
     authUrl.search = new URLSearchParams({
       response_type: 'code', action: 'signin', client_id: CLIENT_ID,
       code_challenge: codeChallenge, code_challenge_method: 'S256',
@@ -142,27 +140,10 @@ export default function App() {
     window.location.href = authUrl.toString();
   };
 
-  // --- 수동 토큰 진입 ---
-  const handleManualLogin = (e) => {
-    e.preventDefault();
-    if (!manualTokenInput.trim()) return showToast('수동 토큰을 입력해주세요.', 'error');
-    if (!sellerId.trim()) return showToast('판매자 ID를 입력해주세요.', 'error');
-    
-    const activeToken = manualTokenInput.trim();
-    setToken(activeToken);
-    localStorage.setItem('cand_token', activeToken);
-    localStorage.setItem('cand_seller_id', sellerId.trim());
-    setIsAuthenticated(true);
-    
-    fetchProductsWithArgs(activeToken, sellerId.trim());
-    fetchScheduledTasks(activeToken);
-  };
-
   const handleLogout = () => {
     localStorage.removeItem('cand_token');
     setIsAuthenticated(false);
     setToken('');
-    setManualTokenInput('');
     showToast('로그아웃 되었습니다. 토큰이 초기화되었습니다.');
   };
 
@@ -191,7 +172,6 @@ export default function App() {
       
     } catch (err) {
       showToast(err.message, 'error');
-      // 권한 에러 시 로그아웃 처리하여 새 토큰을 받도록 유도
       if (err.message.includes('403')) {
         setIsAuthenticated(false);
         localStorage.removeItem('cand_token');
@@ -286,23 +266,21 @@ export default function App() {
 
   const translateStatus = (s) => ({ scheduled: '판매예정', onSale: '판매중', soldOut: '품절', completed: '판매종료' }[s] || s);
 
-  const CustomUI = () => (
-    toast.visible && (
-      <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
-        <div className={`px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
-          {toast.message}
-        </div>
-      </div>
-    )
-  );
-
-  // --- 로그인 화면 (하이브리드) ---
+  // --- 로그인 화면 (CANpass 전용) ---
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <CustomUI />
+        {/* Toast 컴포넌트 인라인 배치 (함수 렌더링 오류 방지) */}
+        {toast.visible && (
+          <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
+            <div className={toast.type === 'error' ? "px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white bg-red-600" : "px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white bg-gray-800"}>
+              {toast.message}
+            </div>
+          </div>
+        )}
+
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
-          <div className="bg-blue-600 p-8 text-center border-b-4 border-blue-700">
+          <div className="bg-[#2563eb] p-8 text-center border-b-4 border-[#1d4ed8]">
             <h1 className="text-2xl font-bold text-white mb-2">VAKE Admin</h1>
             <p className="text-blue-100 text-sm">서비스 관리를 위해 로그인해주세요.</p>
           </div>
@@ -312,39 +290,20 @@ export default function App() {
               <label className="block text-sm font-bold text-gray-700 mb-1">판매자 ID (Seller ID) <span className="text-red-500">*</span></label>
               <input 
                 type="text" value={sellerId} onChange={e => setSellerId(e.target.value)} 
-                placeholder="ex) CS:P8XLJRM3" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" 
+                placeholder="ex) CS:P8XLJRM3" className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-[#2563eb] outline-none" 
               />
             </div>
 
-            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-              <p className="text-xs text-blue-700 font-bold mb-2">방식 1: CANpass 자동 로그인 (권장)</p>
+            <div className="bg-[#eff6ff] p-4 rounded-xl border border-[#bfdbfe]">
+              <p className="text-xs text-[#2563eb] font-bold mb-2">CANpass 연동 로그인</p>
+              {/* 테마 무시하도록 강제 Hex 컬러 적용 */}
               <button 
                 onClick={handleOAuthLogin} disabled={isLoginProcessing}
-                className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-sm"
+                className="w-full bg-[#2563eb] text-white font-bold py-3 rounded-lg hover:bg-[#1d4ed8] transition shadow-sm"
               >
                 {isLoginProcessing ? '인증 처리 중...' : 'CANpass로 권한 승인 및 로그인'}
               </button>
             </div>
-
-            <div className="relative flex items-center py-2">
-              <div className="flex-grow border-t border-gray-200"></div>
-              <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold">OR</span>
-              <div className="flex-grow border-t border-gray-200"></div>
-            </div>
-
-            <form onSubmit={handleManualLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">방식 2: 수동 토큰 입력</label>
-                <textarea 
-                  value={manualTokenInput} onChange={e => setManualTokenInput(e.target.value)} 
-                  placeholder="Bearer 토큰 값을 붙여넣으세요..." 
-                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-gray-800 outline-none text-xs font-mono h-20" 
-                />
-              </div>
-              <button type="submit" className="w-full bg-gray-800 text-white font-bold py-2.5 rounded-lg hover:bg-gray-900 transition">
-                수동 토큰으로 진입하기
-              </button>
-            </form>
           </div>
         </div>
       </div>
@@ -354,17 +313,40 @@ export default function App() {
   // --- 메인 대시보드 화면 ---
   return (
     <div className="flex h-screen bg-gray-50 text-gray-800 overflow-hidden">
-      <CustomUI />
+      {/* Toast 컴포넌트 인라인 배치 */}
+      {toast.visible && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
+          <div className={toast.type === 'error' ? "px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white bg-red-600" : "px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white bg-gray-800"}>
+            {toast.message}
+          </div>
+        </div>
+      )}
       
       <aside className={`${isSidebarOpen ? 'w-64' : 'w-0 hidden'} bg-white border-r flex flex-col transition-all`}>
         <div className="h-16 border-b flex items-center justify-center font-bold text-xl">
-          Admin<span className="text-blue-600">Dash</span>
+          Admin<span className="text-[#2563eb]">Dash</span>
         </div>
         <nav className="flex-1 p-4 space-y-2">
-          <button onClick={() => setActiveTab('productList')} className={`w-full text-left px-4 py-2 rounded-lg text-sm ${activeTab === 'productList' ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-gray-50'}`}>상품 목록</button>
-          <button onClick={() => setActiveTab('schedule')} className={`w-full text-left px-4 py-2 rounded-lg text-sm ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-600 font-bold' : 'hover:bg-gray-50'}`}>상태 예약 (서버리스)</button>
+          {/* 정적 클래스명으로 분리 */}
+          <button 
+            onClick={() => setActiveTab('productList')} 
+            className={activeTab === 'productList' ? "w-full text-left px-4 py-2 rounded-lg text-sm bg-[#eff6ff] text-[#2563eb] font-bold" : "w-full text-left px-4 py-2 rounded-lg text-sm hover:bg-gray-50"}
+          >
+            상품 목록
+          </button>
+          <button 
+            onClick={() => setActiveTab('schedule')} 
+            className={activeTab === 'schedule' ? "w-full text-left px-4 py-2 rounded-lg text-sm bg-[#eff6ff] text-[#2563eb] font-bold" : "w-full text-left px-4 py-2 rounded-lg text-sm hover:bg-gray-50"}
+          >
+            상태 예약 (서버리스)
+          </button>
           <div className="pt-4 mt-4 border-t">
-            <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2 rounded-lg text-sm ${activeTab === 'settings' ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>시스템 설정</button>
+            <button 
+              onClick={() => setActiveTab('settings')} 
+              className={activeTab === 'settings' ? "w-full text-left px-4 py-2 rounded-lg text-sm bg-gray-100" : "w-full text-left px-4 py-2 rounded-lg text-sm hover:bg-gray-50"}
+            >
+              시스템 설정
+            </button>
           </div>
           <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 mt-8 font-bold">로그아웃 및 초기화</button>
         </nav>
@@ -373,7 +355,7 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 bg-white border-b flex items-center justify-between px-6 shrink-0">
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-xl font-bold hover:text-blue-600 transition">≡</button>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-xl font-bold hover:text-[#2563eb] transition">≡</button>
             <h2 className="font-bold">
               {activeTab === 'productList' && '판매 상품 현황'}
               {activeTab === 'schedule' && '상태 변경 예약'}
@@ -382,7 +364,7 @@ export default function App() {
           </div>
           <div className="flex gap-2">
             <span className="bg-gray-100 text-gray-600 text-xs font-bold px-3 py-1.5 rounded border">Seller: {sellerId}</span>
-            <span className="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1.5 rounded border border-blue-100">PRODUCTION</span>
+            <span className="bg-[#eff6ff] text-[#1d4ed8] text-xs font-bold px-3 py-1.5 rounded border border-[#bfdbfe]">PRODUCTION</span>
           </div>
         </header>
 
@@ -404,20 +386,24 @@ export default function App() {
                         <tr><td colSpan="4" className="p-8 text-center text-gray-400">데이터가 없거나 해당 판매자의 상품이 아닙니다.</td></tr>
                     ) : (
                         products.map(product => (
-                          <tr key={product.id} className="hover:bg-blue-50/50 transition">
+                          <tr key={product.id} className="hover:bg-[#eff6ff] transition">
                             <td className="p-4">
                                 <div className="font-bold text-gray-900">{product.name}</div>
                                 <div className="text-xs text-gray-400 font-mono mt-0.5">{product.id}</div>
                             </td>
                             <td className="p-4 text-gray-600">{product.price?.toLocaleString()} {product.currency || 'KRW'}</td>
                             <td className="p-4 text-center">
-                              <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold 
-                                ${product.status === 'onSale' ? 'bg-green-100 text-green-700' : product.status === 'soldOut' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700'}`}>
+                              {/* 상태 표시에 사용된 클래스명도 정적 문자열로 고정 */}
+                              <span className={
+                                product.status === 'onSale' ? "inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700" : 
+                                product.status === 'soldOut' ? "inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-700" : 
+                                "inline-block px-2.5 py-1 rounded-full text-xs font-bold bg-gray-100 text-gray-700"
+                              }>
                                 {translateStatus(product.status)}
                               </span>
                             </td>
                             <td className="p-4 text-center">
-                              {product.isDisplayed ? <span className="text-blue-600 font-bold text-sm">진열중</span> : <span className="text-gray-400 text-sm font-medium">숨김</span>}
+                              {product.isDisplayed ? <span className="text-[#2563eb] font-bold text-sm">진열중</span> : <span className="text-gray-400 text-sm font-medium">숨김</span>}
                             </td>
                           </tr>
                         ))
@@ -430,7 +416,7 @@ export default function App() {
 
           {activeTab === 'schedule' && (
             <div className="max-w-4xl mx-auto space-y-6">
-              <div className="bg-white rounded-xl shadow-sm border border-t-4 border-t-blue-600 p-6">
+              <div className="bg-white rounded-xl shadow-sm border border-t-4 border-t-[#2563eb] p-6">
                 <div className="flex justify-between items-center mb-6">
                     <h3 className="font-bold text-lg">새 예약 등록 (AWS 연동)</h3>
                 </div>
@@ -445,7 +431,7 @@ export default function App() {
                         }} 
                         onFocus={() => setIsProductSelectOpen(true)}
                         placeholder="상품명 또는 ID를 입력하세요..." 
-                        className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
+                        className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-[#2563eb] text-sm" 
                     />
                     {isProductSelectOpen && (
                       <>
@@ -453,7 +439,7 @@ export default function App() {
                         <div className="absolute left-0 right-0 top-full mt-1 bg-white border rounded-lg shadow-xl z-20 max-h-60 overflow-y-auto">
                           <div className="p-2">
                               {products.filter(p => p.name.includes(productSearchTerm) || p.id.includes(productSearchTerm)).map(p => (
-                                <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left p-2.5 text-sm hover:bg-blue-50 rounded mb-1">
+                                <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left p-2.5 text-sm hover:bg-[#eff6ff] rounded mb-1">
                                   <div className="font-bold text-gray-900">{p.name}</div> 
                                   <div className="text-xs text-gray-400 mt-0.5">{p.id}</div>
                                 </button>
@@ -466,13 +452,13 @@ export default function App() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-1.5">2. 변경할 판매상태</label>
-                      <select value={scheduleForm.status} onChange={e => setScheduleForm({...scheduleForm, status: e.target.value})} className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                      <select value={scheduleForm.status} onChange={e => setScheduleForm({...scheduleForm, status: e.target.value})} className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-[#2563eb] text-sm">
                         <option value="onSale">판매중</option><option value="soldOut">품절</option><option value="scheduled">판매예정</option><option value="completed">판매종료</option>
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-gray-700 mb-1.5">3. 진열 여부</label>
-                      <select value={scheduleForm.isDisplayed} onChange={e => setScheduleForm({...scheduleForm, isDisplayed: e.target.value})} className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                      <select value={scheduleForm.isDisplayed} onChange={e => setScheduleForm({...scheduleForm, isDisplayed: e.target.value})} className="w-full p-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-[#2563eb] text-sm">
                         <option value="true">진열함 (표시)</option><option value="false">진열안함 (숨김)</option>
                       </select>
                     </div>
@@ -480,7 +466,7 @@ export default function App() {
                   <div className="relative">
                     <label className="block text-sm font-bold text-gray-700 mb-1.5">4. 실행 일시</label>
                     <div onClick={openDatePicker} className="w-full p-2.5 border rounded-lg cursor-pointer bg-white text-sm">
-                        {confirmedDateTime ? <span className="font-bold text-blue-700">{new Date(confirmedDateTime).toLocaleString()}</span> : <span className="text-gray-400">클릭하여 예약 일시 선택...</span>}
+                        {confirmedDateTime ? <span className="font-bold text-[#1d4ed8]">{new Date(confirmedDateTime).toLocaleString()}</span> : <span className="text-gray-400">클릭하여 예약 일시 선택...</span>}
                     </div>
                     {isDatePickerOpen && (
                       <>
@@ -493,13 +479,13 @@ export default function App() {
                           </div>
                           <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => setIsDatePickerOpen(false)} className="text-sm font-bold px-4 py-2 bg-gray-100 rounded">취소</button>
-                            <button type="button" onClick={handleConfirmDatePicker} className="text-sm font-bold px-4 py-2 bg-blue-600 text-white rounded">설정 확정</button>
+                            <button type="button" onClick={handleConfirmDatePicker} className="text-sm font-bold px-4 py-2 bg-[#2563eb] text-white rounded">설정 확정</button>
                           </div>
                         </div>
                       </>
                     )}
                   </div>
-                  <button type="submit" className="w-full py-3.5 mt-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-md">예약 데이터 AWS 전송하기</button>
+                  <button type="submit" className="w-full py-3.5 mt-2 bg-[#2563eb] text-white font-bold rounded-lg hover:bg-[#1d4ed8] transition shadow-md">예약 데이터 AWS 전송하기</button>
                 </form>
               </div>
 
@@ -516,13 +502,13 @@ export default function App() {
                         const targetProduct = products.find(p => p.id === t.productId);
                         const displayName = targetProduct ? targetProduct.name : (t.productName !== 'Unknown Product' ? t.productName : t.productId);
                         return (
-                          <div key={t.id} className="p-4 border rounded-xl bg-blue-50/40 border-blue-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                          <div key={t.id} className="p-4 border rounded-xl bg-[#eff6ff] border-[#bfdbfe] flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                             <div>
                               <div className="font-bold text-gray-900 mb-1">{displayName}</div>
                               <div className="text-xs text-gray-600 flex flex-wrap gap-2">
                                   <span className="bg-white px-2 py-0.5 rounded border">상태: <b>{translateStatus(t.newStatus)}</b></span>
                                   <span className="bg-white px-2 py-0.5 rounded border">진열: <b>{t.newIsDisplayed ? '표시' : '숨김'}</b></span>
-                                  <span className="bg-white px-2 py-0.5 rounded border text-blue-700">실행일시: <b>{new Date(t.executeAt).toLocaleString()}</b></span>
+                                  <span className="bg-white px-2 py-0.5 rounded border text-[#1d4ed8]">실행일시: <b>{new Date(t.executeAt).toLocaleString()}</b></span>
                               </div>
                             </div>
                             <button onClick={() => handleDeleteTask(t)} className="text-xs font-bold text-red-600 px-4 py-2 bg-white border border-red-200 rounded-lg hover:bg-red-50">예약 취소</button>
@@ -552,13 +538,13 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md">
             <h3 className="text-xl font-bold mb-5 border-b pb-3">예약을 등록하시겠습니까?</h3>
-            <div className="bg-blue-50/50 p-5 rounded-xl mb-6 space-y-2 border border-blue-100 text-sm">
+            <div className="bg-[#eff6ff] p-5 rounded-xl mb-6 space-y-2 border border-[#bfdbfe] text-sm">
               <p className="flex justify-between"><span className="text-gray-500 font-bold">대상 상품</span> <span className="font-bold text-gray-900">{products.find(p => p.id === scheduleForm.productId)?.name || scheduleForm.productId}</span></p>
-              <div className="pt-2 mt-2 border-t border-blue-200"><p className="flex justify-between items-center"><span className="text-blue-700 font-bold">실행 일시</span> <span className="font-bold text-blue-700">{new Date(confirmedDateTime).toLocaleString()}</span></p></div>
+              <div className="pt-2 mt-2 border-t border-[#bfdbfe]"><p className="flex justify-between items-center"><span className="text-[#1d4ed8] font-bold">실행 일시</span> <span className="font-bold text-[#1d4ed8]">{new Date(confirmedDateTime).toLocaleString()}</span></p></div>
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setIsConfirmModalOpen(false)} className="px-5 py-2 bg-gray-100 rounded-lg font-bold">취소</button>
-              <button onClick={handleConfirmRegister} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold">예약하기</button>
+              <button onClick={handleConfirmRegister} className="px-5 py-2 bg-[#2563eb] text-white rounded-lg font-bold">예약하기</button>
             </div>
           </div>
         </div>
