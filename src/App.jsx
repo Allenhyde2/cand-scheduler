@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
+const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
 const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member:MOIM:product:read member:MOIM:product:write';
 
-// PKCE 인증용 난수 생성기
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
@@ -60,24 +60,33 @@ export default function App() {
   // --- ⭐️ 핵심: 내 프로필에서 CS: 아이디를 자동으로 찾아오는 함수 ---
   const autoFetchSellerId = async (accessToken) => {
     try {
-      const url = `https://cand-scheduler.vercel.app/api/proxy?endpoint=me`;
-      const res = await fetch(url, {
+      const fetchOptions = {
         method: 'GET',
         headers: {
           'content-type': 'application/json',
           'authorization': `Bearer ${accessToken}`,
           'x-can-community-id': communityId
         }
-      });
+      };
+
+      // 1. 표준 유저 정보 API (/users/me) 찔러보기
+      let res = await fetch(`https://cand-scheduler.vercel.app/api/proxy?endpoint=users/me`, fetchOptions);
       
-      if (!res.ok) throw new Error("프로필 정보를 가져오지 못했습니다.");
+      // 2. 만약 404 에러가 나면 백엔드가 말한 그대로 (/me) 찔러보기 (Fallback)
+      if (!res.ok) {
+        res = await fetch(`https://cand-scheduler.vercel.app/api/proxy?endpoint=me`, fetchOptions);
+      }
+      
+      if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
       const data = await res.json();
       
+      console.log("🕵️‍♂️ 불러온 내 프로필 정보:", data);
+
       // profiles 리스트에서 CS:로 시작하는 ID 찾기
       const sellerProfile = data.profiles?.find(p => p.id && p.id.startsWith('CS:'));
       
       if (!sellerProfile) {
-        throw new Error("판매자(CS:) 권한이 없는 계정입니다.");
+        throw new Error("판매자(CS:) 권한 프로필이 존재하지 않는 계정입니다.");
       }
       
       return sellerProfile.id;
@@ -133,7 +142,7 @@ export default function App() {
             finalSellerId = await autoFetchSellerId(accessToken);
             if (!finalSellerId) {
               setIsLoginProcessing(false);
-              return; // 셀러 아이디 없으면 중단
+              return; // 셀러 아이디를 못 찾으면 진행 중단
             }
           }
 
@@ -252,20 +261,115 @@ export default function App() {
     } catch (err) {}
   };
 
-  // UI 핸들러 (기존과 동일)
+  const fetchProducts = () => fetchProductsWithArgs(token, sellerId);
+
+  const handleSelectProduct = (product) => {
+    setScheduleForm({ ...scheduleForm, productId: product.id });
+    setProductSearchTerm(product.name);
+    setIsProductSelectOpen(false);
+    const newRecents = [product, ...recentProducts.filter(p => p.id !== product.id)].slice(0, 5);
+    setRecentProducts(newRecents);
+    localStorage.setItem('cand_recent_products', JSON.stringify(newRecents));
+  };
+
+  const handlePreSubmit = (e) => {
+    e.preventDefault();
+    if (!scheduleForm.productId) return showToast('상품을 선택해주세요.', 'error');
+    if (!confirmedDateTime) return showToast('일시를 선택해주세요.', 'error');
+    setIsConfirmModalOpen(true);
+  };
+
+  const handleConfirmRegister = async () => {
+    setIsConfirmModalOpen(false);
+    showToast('예약 전송 중...', 'info');
+    const newTaskId = Math.random().toString(36).substr(2, 9);
+    try {
+      const res = await fetch(SCHEDULER_API_URL, {
+        method: 'POST',
+        headers: getAuthHeaders(token),
+        body: JSON.stringify({
+          action: 'CREATE', taskId: newTaskId, productId: scheduleForm.productId,
+          newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
+          executeAt: new Date(confirmedDateTime).toISOString(), token, communityId
+        })
+      });
+      if (!res.ok) throw new Error();
+      showToast('예약 성공!', 'success');
+      fetchScheduledTasks(token);
+    } catch (err) { showToast('예약 실패', 'error'); }
+  };
+
+  const handleDeleteTask = async (task) => {
+    if (!window.confirm('취소하시겠습니까?')) return;
+    try {
+      await fetch(SCHEDULER_API_URL, {
+        method: 'POST', headers: getAuthHeaders(token),
+        body: JSON.stringify({ action: 'DELETE', taskId: task.id, token, communityId })
+      });
+      showToast('취소 완료');
+      fetchScheduledTasks(token);
+    } catch (err) { showToast('실패'); }
+  };
+
+  const openEditModal = (task) => {
+    const d = new Date(task.executeAt);
+    const tzoffset = d.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(d.getTime() - tzoffset)).toISOString().slice(0, 16);
+    const [date, time] = localISOTime.split('T');
+
+    setEditModal({
+      isOpen: true, task, status: task.newStatus,
+      isDisplayed: task.newIsDisplayed ? 'true' : 'false', date, time
+    });
+  };
+
+  const handleConfirmEdit = async () => {
+    if (!editModal.date || !editModal.time) return showToast('수정할 날짜와 시간을 입력해주세요.', 'error');
+    const executeTimeIso = new Date(`${editModal.date}T${editModal.time}`).toISOString();
+    
+    try {
+      showToast('AWS 클라우드 예약을 수정하는 중...', 'info');
+      const response = await fetch(SCHEDULER_API_URL, {
+        method: 'POST',  headers: getAuthHeaders(token), 
+        body: JSON.stringify({
+          action: 'UPDATE', taskId: editModal.task.id, productId: editModal.task.productId,
+          newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true',
+          executeAt: executeTimeIso, token, communityId
+        })
+      });
+      if (!response.ok) throw new Error();
+
+      setTasks(prev => prev.map(t => t.id === editModal.task.id ? {
+          ...t, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true',
+          executeAt: new Date(`${editModal.date}T${editModal.time}`).getTime(),
+          logs: [`✅ ${new Date().toLocaleTimeString()} - 예약 수정됨.`, ...t.logs]
+      } : t)); 
+      
+      setEditModal({ ...editModal, isOpen: false });
+      showToast('예약이 수정되었습니다.', 'success');
+    } catch (err) {
+      showToast('수정 실패', 'error');
+    }
+  };
+
   const translateStatus = (s) => ({ scheduled: '판매예정', onSale: '판매중', soldOut: '품절', completed: '판매종료' }[s] || s);
+
+  const displayedTasks = tasks.filter(task => products.some(p => p.id === task.productId));
+
+  const CustomUI = () => (
+    toast.visible && (
+      <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
+        <div className={`px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
+          {toast.message}
+        </div>
+      </div>
+    )
+  );
 
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4 font-sans text-gray-800">
-        {toast.visible && (
-          <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
-            <div className={`px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
-              {toast.message}
-            </div>
-          </div>
-        )}
-
+        <CustomUI />
         <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
           <div className="bg-blue-600 p-8 text-center" style={{ backgroundColor: '#2563eb' }}>
             <h1 className="text-2xl font-bold text-white mb-2">VAKE Workspace</h1>
@@ -290,7 +394,7 @@ export default function App() {
           <form onSubmit={handleOAuthLogin} className="p-8 space-y-6">
             {loginMode === 'seller' ? (
               <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center">
-                <p className="text-blue-800 font-bold mb-2">본인의 계정으로 접속합니다.</p>
+                <p className="text-blue-800 font-bold mb-2">👋 본인의 계정으로 접속합니다.</p>
                 <p className="text-blue-600 text-xs leading-relaxed">로그인 완료 시, 프로필에서 판매자 ID(CS:...)를<br/>자동으로 추출하여 상품 목록을 불러옵니다.</p>
               </div>
             ) : (
@@ -308,7 +412,7 @@ export default function App() {
 
             <button 
               type="submit" disabled={isLoginProcessing}
-              className="w-full text-white font-bold py-4 rounded-xl hover:opacity-90 transition-opacity shadow-md disabled:opacity-50"
+              className="w-full text-white font-bold py-4 rounded-xl shadow-md transition hover:opacity-90 disabled:opacity-50"
               style={{ backgroundColor: '#2563eb' }}
             >
               {isLoginProcessing ? '인증 진행 중...' : 'CANpass로 로그인하기'}
@@ -319,49 +423,31 @@ export default function App() {
     );
   }
 
-  // --- 메인 대시보드 화면 ---
   return (
     <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
-      {toast.visible && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
-          <div className={`px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
-            {toast.message}
-          </div>
-        </div>
-      )}
-      
-      <aside className={`${isSidebarOpen ? 'w-64' : 'w-0 hidden'} flex-shrink-0 bg-white border-r border-gray-200 transition-all duration-300 flex flex-col`}>
-        <div className="h-16 border-b flex items-center justify-center px-6 shrink-0">
-          <span className="text-xl font-bold tracking-tight">VAKE<span className="text-blue-600 ml-1">Work</span></span>
-        </div>
-        
-        <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-          <button onClick={() => setActiveTab('productList')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium ${activeTab === 'productList' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}>상품 관리 현황</button>
-          <button onClick={() => setActiveTab('schedule')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}>상태 예약 변경</button>
-          <button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium ${activeTab === 'settings' ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>시스템 세팅</button>
+      <CustomUI />
+      <aside className={`${isSidebarOpen ? 'w-64' : 'w-0 hidden'} flex-shrink-0 bg-white border-r transition-all duration-300 flex flex-col`}>
+        <div className="h-16 border-b flex items-center justify-center px-6 shrink-0"><span className="text-xl font-bold">VAKE<span className="text-blue-600 ml-1">Work</span></span></div>
+        <nav className="flex-1 py-4">
+          <ul className="space-y-1 px-3">
+            <li><button onClick={() => setActiveTab('productList')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium ${activeTab === 'productList' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}>판매 상품 현황</button></li>
+            <li><button onClick={() => setActiveTab('schedule')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium ${activeTab === 'schedule' ? 'bg-blue-50 text-blue-700' : 'hover:bg-gray-50'}`}>상태 예약 변경</button></li>
+            <li><button onClick={() => setActiveTab('settings')} className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium ${activeTab === 'settings' ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>시스템 정보</button></li>
+          </ul>
         </nav>
-        
-        <div className="p-4 border-t">
-          <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 font-bold hover:bg-red-50 rounded-lg">로그아웃</button>
-        </div>
+        <div className="p-4 border-t"><button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-500 font-bold">로그아웃</button></div>
       </aside>
 
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6 shrink-0 relative">
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 bg-white border-b flex items-center justify-between px-6 flex-shrink-0 relative">
           <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: '#2563eb' }}></div>
           <div className="flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-xl font-bold hover:text-blue-600 transition">≡</button>
-            <h2 className="text-lg font-bold">
-              {activeTab === 'productList' && '상품 관리 현황'}
-              {activeTab === 'schedule' && '상태 예약 변경'}
-              {activeTab === 'settings' && '시스템 설정'}
-            </h2>
+            <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-xl font-bold">≡</button>
+            <h2 className="text-lg font-bold">{activeTab === 'productList' ? '상품 현황' : activeTab === 'schedule' ? '예약 설정' : '접속 정보'}</h2>
           </div>
           <div className="flex items-center gap-2">
-             <span className="bg-gray-100 text-gray-600 border text-xs font-bold px-3 py-1.5 rounded-md">Seller ID: {sellerId}</span>
-             <span className={`text-xs font-bold px-3 py-1.5 rounded-md border ${loginMode === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                {loginMode.toUpperCase()} ENV
-             </span>
+             <span className="bg-gray-100 text-gray-600 border text-xs font-bold px-3 py-1.5 rounded-md">ID: {sellerId || '로딩중...'}</span>
+             <span className={`text-xs font-bold px-3 py-1.5 rounded-md border ${loginMode === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{loginMode.toUpperCase()}</span>
           </div>
         </header>
 
@@ -371,23 +457,23 @@ export default function App() {
               <div className="bg-white p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-bold text-lg">내 판매 상품 목록</h3>
-                  <button onClick={() => fetchProductsWithArgs(token, sellerId)} className="px-4 py-2 bg-gray-100 text-sm font-bold rounded-lg hover:bg-gray-200">목록 새로고침</button>
+                  <button onClick={fetchProducts} disabled={isLoading} className="px-4 py-2 bg-gray-100 text-sm font-bold rounded-lg hover:bg-gray-200">새로고침</button>
                 </div>
-                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-                  <table className="w-full text-left text-sm">
-                    <thead className="bg-gray-50 text-gray-500 font-bold uppercase border-b">
-                      <tr><th className="p-4">상품 정보</th><th className="p-4">가격</th><th className="p-4 text-center">판매 상태</th><th className="p-4 text-center">진열 유무</th></tr>
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full text-left bg-white text-sm">
+                    <thead className="bg-gray-50 border-b text-gray-500">
+                      <tr><th className="p-4">상품명</th><th className="p-4">가격</th><th className="p-4 text-center">상태</th><th className="p-4 text-center">진열</th></tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y">
                       {products.length === 0 ? (
-                        <tr><td colSpan="4" className="p-12 text-center text-gray-400">조회된 상품 데이터가 없습니다.</td></tr>
+                        <tr><td colSpan="4" className="p-12 text-center text-gray-400">등록된 상품이 없거나 불러오는 중입니다.</td></tr>
                       ) : (
                         products.map(p => (
-                          <tr key={p.id} className="hover:bg-blue-50/30 transition">
+                          <tr key={p.id} className="hover:bg-gray-50">
                             <td className="p-4 font-bold">{p.name}<div className="text-xs text-gray-400 font-mono mt-1">{p.id}</div></td>
-                            <td className="p-4 text-gray-600">{p.price?.toLocaleString()} {p.currency}</td>
-                            <td className="p-4 text-center"><span className={`px-2.5 py-1 rounded-full text-xs font-bold ${p.status === 'onSale' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>{translateStatus(p.status)}</span></td>
-                            <td className="p-4 text-center">{p.isDisplayed ? <span className="text-blue-600 font-bold">진열 중</span> : <span className="text-gray-400">숨김</span>}</td>
+                            <td className="p-4">{p.price?.toLocaleString()} {p.currency}</td>
+                            <td className="p-4 text-center"><span className={`px-2 py-1 rounded-full text-xs font-bold ${p.status === 'onSale' ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>{translateStatus(p.status)}</span></td>
+                            <td className="p-4 text-center">{p.isDisplayed ? <span className="text-blue-600 font-bold">진열중</span> : '숨김'}</td>
                           </tr>
                         ))
                       )}
@@ -402,12 +488,7 @@ export default function App() {
              <div className="max-w-4xl mx-auto space-y-6">
                 <div className="bg-white p-8 rounded-xl shadow-sm border border-t-4 border-t-blue-600">
                   <h3 className="font-bold text-lg mb-6">새 상태 변경 예약 등록</h3>
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!scheduleForm.productId) return showToast('상품을 먼저 선택해주세요.', 'error');
-                    if (!confirmedDateTime) return showToast('실행 일시를 선택해주세요.', 'error');
-                    setIsConfirmModalOpen(true);
-                  }} className="space-y-5">
+                  <form onSubmit={handlePreSubmit} className="space-y-5">
                     <div className="relative">
                       <label className="block text-sm font-bold text-gray-700 mb-2">1. 대상 상품 선택</label>
                       <input 
@@ -419,11 +500,7 @@ export default function App() {
                       {isProductSelectOpen && (
                         <div className="absolute left-0 right-0 top-full mt-1 bg-white border shadow-xl rounded-lg z-50 max-h-56 overflow-y-auto divide-y">
                           {products.filter(p => p.name.includes(productSearchTerm) || p.id.includes(productSearchTerm)).map(p => (
-                            <div key={p.id} onClick={() => { 
-                              setScheduleForm({ ...scheduleForm, productId: p.id }); 
-                              setProductSearchTerm(p.name);
-                              setIsProductSelectOpen(false);
-                            }} className="p-3 hover:bg-blue-50 cursor-pointer text-sm">
+                            <div key={p.id} onClick={() => handleSelectProduct(p)} className="p-3 hover:bg-blue-50 cursor-pointer text-sm">
                               <b>{p.name}</b> <span className="text-xs text-gray-400 ml-2">({p.id})</span>
                             </div>
                           ))}
@@ -455,15 +532,10 @@ export default function App() {
                           <div className="font-bold text-sm text-gray-900">{t.productName}</div>
                           <div className="text-xs text-gray-500 mt-1">{new Date(t.executeAt).toLocaleString()} | {translateStatus(t.newStatus)} | {t.newIsDisplayed ? '진열' : '숨김'}</div>
                         </div>
-                        <button onClick={async () => {
-                          if(!window.confirm('정말 취소하시겠습니까?')) return;
-                          await fetch(SCHEDULER_API_URL, {
-                            method: 'POST', headers: getAuthHeaders(token),
-                            body: JSON.stringify({ action: 'DELETE', taskId: t.id, token, communityId })
-                          });
-                          showToast('예약이 성공적으로 취소되었습니다.');
-                          fetchScheduledTasks(token);
-                        }} className="text-xs font-bold text-red-600 px-3 py-1.5 bg-white border border-red-200 rounded-lg hover:bg-red-50">취소</button>
+                        <div className="flex gap-2">
+                          <button onClick={() => openEditModal(t)} className="text-xs font-bold text-blue-600 px-3 py-1.5 bg-white border border-blue-200 rounded-lg hover:bg-blue-50">수정</button>
+                          <button onClick={() => handleDeleteTask(t)} className="text-xs font-bold text-red-600 px-3 py-1.5 bg-white border border-red-200 rounded-lg hover:bg-red-50">취소</button>
+                        </div>
                      </div>
                    ))}
                 </div>
@@ -484,33 +556,39 @@ export default function App() {
         </div>
       </main>
 
-      {/* 최종 확인 모달 */}
+      {/* 예약 등록 모달 */}
       {isConfirmModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
             <h3 className="text-xl font-bold mb-4">예약을 등록할까요?</h3>
-            <p className="text-sm text-gray-600 mb-6">설정한 시간에 맞춰 클라우드 서버에서 판매 상태가 자동으로 변경됩니다.</p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setIsConfirmModalOpen(false)} className="px-4 py-2 bg-gray-100 rounded-lg font-bold">취소</button>
-              <button onClick={async () => {
-                setIsConfirmModalOpen(false);
-                showToast('AWS 전송 중...', 'info');
-                const newTaskId = Math.random().toString(36).substr(2, 9);
-                try {
-                  const res = await fetch(SCHEDULER_API_URL, {
-                    method: 'POST',
-                    headers: getAuthHeaders(token),
-                    body: JSON.stringify({
-                      action: 'CREATE', taskId: newTaskId, productId: scheduleForm.productId,
-                      newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
-                      executeAt: new Date(confirmedDateTime).toISOString(), token, communityId
-                    })
-                  });
-                  if(!res.ok) throw new Error();
-                  showToast('성공적으로 예약되었습니다!', 'success');
-                  fetchScheduledTasks(token);
-                } catch(e) { showToast('전송 실패', 'error'); }
-              }} className="px-4 py-2 text-white rounded-lg font-bold" style={{ backgroundColor: '#2563eb' }}>예약 전송</button>
+              <button onClick={handleConfirmRegister} className="px-4 py-2 text-white rounded-lg font-bold" style={{ backgroundColor: '#2563eb' }}>예약 전송</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 예약 수정 모달 */}
+      {editModal.isOpen && (
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <h3 className="text-lg font-bold mb-4 border-b pb-2 text-blue-700">예약 전송 수정</h3>
+            <div className="space-y-4 mb-6">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">날짜 변경</label>
+                  <input type="date" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} className="w-full border p-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">시간 변경</label>
+                  <input type="time" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} className="w-full border p-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-4 py-2 bg-gray-200 rounded font-medium text-sm">취소</button>
+              <button onClick={handleConfirmEdit} className="px-4 py-2 bg-blue-600 text-white rounded font-bold text-sm shadow-sm hover:bg-blue-700">수정 저장하기</button>
             </div>
           </div>
         </div>
