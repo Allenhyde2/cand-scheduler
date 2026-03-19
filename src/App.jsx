@@ -9,13 +9,27 @@ const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
+// ⭐️ JWT(토큰)에서 유저 정보를 해독하는 함수
+const parseJwt = (token) => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+    }).join(''));
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+};
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
   const [communityId] = useState(DEFAULT_GROUP_ID); 
   const [sellerId, setSellerId] = useState(''); 
   
-  // ⭐️ 로그인 모드 상태 (admin | seller)
+  // 로그인 모드 상태 (admin | seller)
   const [loginMode, setLoginMode] = useState('seller');
 
   const [activeTab, setActiveTab] = useState('productList'); 
@@ -103,26 +117,22 @@ export default function App() {
 
           const accessToken = data.access_token;
           
-          let finalSellerId = '';
-
-          // ⭐️ 모드에 따른 초기 Seller ID 세팅
+          let initialSellerId = '';
           if (savedLoginMode === 'admin') {
-            finalSellerId = savedSellerId || ''; // 어드민은 입력했던 값 그대로 유지
-          } else {
-            finalSellerId = ''; // 판매자는 캔패스 유저ID(Base64)를 쓰지 않고 일단 비워둡니다. (역추출 예정)
+            initialSellerId = savedSellerId || ''; 
           }
 
           setLoginMode(savedLoginMode);
           setToken(accessToken);
-          setSellerId(finalSellerId);
+          setSellerId(initialSellerId); // 판매자는 일단 빈 값 세팅 후 API 호출 시 역추출
           setIsAuthenticated(true);
           
           localStorage.setItem('cand_token', accessToken);
-          localStorage.setItem('cand_seller_id', finalSellerId);
+          if(savedLoginMode === 'admin') localStorage.setItem('cand_seller_id', initialSellerId);
           localStorage.setItem('cand_login_mode', savedLoginMode);
 
-          // 상품 목록 불러오기 (여기서 역추출이 일어납니다)
-          fetchProductsWithArgs(accessToken, DEFAULT_GROUP_ID, finalSellerId, savedLoginMode);
+          // ⭐️ 데이터 로드 및 셀러 ID 자동 추출
+          fetchProductsWithArgs(accessToken, DEFAULT_GROUP_ID, initialSellerId, savedLoginMode);
           fetchScheduledTasks(accessToken, DEFAULT_GROUP_ID);
           
           showToast(`${savedLoginMode === 'admin' ? '어드민' : '판매자'} 로그인이 완료되었습니다.`, 'success');
@@ -160,13 +170,11 @@ export default function App() {
   const handleOAuthLogin = async (e) => {
     e.preventDefault();
     
-    // 어드민 모드일 때만 수동 입력값 검사
     if (loginMode === 'admin') {
       const cleanSellerId = sellerId.trim();
       if (!cleanSellerId) return showToast('조회할 판매자 ID를 먼저 입력해주세요.', 'error');
       localStorage.setItem('cand_seller_id', cleanSellerId);
     } else {
-      // 판매자 모드일 때는 기존 Seller ID 초기화 (로그인 후 역추출하기 위함)
       setSellerId('');
       localStorage.setItem('cand_seller_id', '');
     }
@@ -256,19 +264,29 @@ export default function App() {
       const data = JSON.parse(responseText);
       let fetchedList = data.data || [];
 
-      // ⭐️ 핵심: 판매자 모드 (필터 건너뛰고 셀러 ID 역추출) vs 어드민 모드 (강제 필터링)
+      // ⭐️ 핵심 수정: CANpass 고유 ID를 이용한 이중 크로스 체크 추출 로직!
       if (activeMode === 'seller') {
-        // 판매자는 백엔드에서 본인 상품만 주므로 필터링 패스!
-        // 대신 첫 번째 상품에서 'CS:...' 형식의 셀러 ID를 뽑아서 화면과 스토리지에 저장해줍니다.
-        if (fetchedList.length > 0) {
-          const autoDetectedId = fetchedList[0].sellerId || fetchedList[0].userId || fetchedList[0].creatorId;
-          if (autoDetectedId) {
-            setSellerId(autoDetectedId);
-            localStorage.setItem('cand_seller_id', autoDetectedId);
+        const decodedPayload = parseJwt(activeToken);
+        const canpassUserId = decodedPayload ? (decodedPayload.userId || decodedPayload.canAccount) : null;
+
+        if (canpassUserId) {
+          // 1. 전체 상품 중에서, 등록자(userId)가 내 진짜 캔패스 ID와 일치하는 '내 상품'만 필터링합니다.
+          const myRealProducts = fetchedList.filter(p => p.userId === canpassUserId || p.creatorId === canpassUserId);
+
+          if (myRealProducts.length > 0) {
+            // 2. 다른 사람의 상품이 아닌, 내 상품에서 안전하게 CS:... 형태의 셀러 아이디를 뽑아냅니다.
+            const autoDetectedSellerId = myRealProducts[0].sellerId || canpassUserId;
+            setSellerId(autoDetectedSellerId);
+            localStorage.setItem('cand_seller_id', autoDetectedSellerId);
+            fetchedList = myRealProducts; // 화면에는 완벽하게 필터링된 내 상품만 노출!
+          } else {
+            // 아직 등록한 상품이 없어서 매칭이 안 되는 경우 (빈 목록)
+            setSellerId('상품 등록 필요');
+            fetchedList = [];
           }
         }
       } else {
-        // 어드민 모드는 전체 상품이 내려오므로 사용자가 입력한 아이디로 필터링
+        // 어드민 모드: 입력한 ID로 전체 리스트를 강제 필터링
         if (currentSellerId) {
           fetchedList = fetchedList.filter(p => {
             const idField = p.userId || p.sellerId || p.creatorId; 
@@ -278,7 +296,7 @@ export default function App() {
       }
 
       setProducts(fetchedList);
-      showToast('상품 목록을 불러왔습니다.', 'success');
+      showToast('상품 목록을 성공적으로 불러왔습니다.', 'success');
     } catch (err) {
       showToast('목록 로드 실패: ' + err.message, 'error');
     } finally {
@@ -424,7 +442,7 @@ export default function App() {
             <p className="text-blue-100 text-sm font-medium">서비스 관리를 위해 로그인해주세요.</p>
           </div>
 
-          {/* ⭐️ 로그인 모드 선택 탭 */}
+          {/* 로그인 모드 선택 탭 */}
           <div className="flex border-b border-gray-200">
             <button 
               onClick={() => setLoginMode('seller')}
