@@ -298,7 +298,7 @@ export default function App() {
               <p className="text-xs text-blue-600 font-bold mb-2">CANpass 연동 로그인</p>
               {/* 표준 유틸리티 클래스 적용 */}
               <button 
-                onClick={handleOAuthLogin} disabled={isLoginProcessing} style={backgroundColor: '#2563EB'}
+                onClick={handleOAuthLogin} disabled={isLoginProcessing} style="bg-#2563EB"
                 className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-sm"
               >
                 {isLoginProcessing ? '인증 처리 중...' : 'CANpass로 권한 승인 및 로그인'}
