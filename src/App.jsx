@@ -98,20 +98,24 @@ export default function App() {
         }
 
         try {
-          const res = await fetch('https://canpass.me/oauth2/token', {
+          // ⭐️ 수정됨: 브라우저 직접 통신이 아닌, Vercel 프록시 API(/api/token)로 우회하도록 복구했습니다.
+          const redirectUri = `${window.location.origin}/canpass/callback`;
+          const tokenApiUrl = `${window.location.origin}/api/token`;
+
+          const res = await fetch(tokenApiUrl, {
             method: 'POST',
-            headers: { 'content-type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              grant_type: 'authorization_code',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
               client_id: CLIENT_ID,
               code: code,
-              code_verifier: codeVerifier
+              code_verifier: codeVerifier,
+              redirect_uri: redirectUri
             })
           });
 
-          if (!res.ok) throw new Error('토큰 발급 실패');
-
           const data = await res.json();
+          if (!res.ok) throw new Error(data.error_description || data.error || '토큰 발급 실패');
+
           const accessToken = data.access_token;
           
           let finalSellerId = '';
@@ -666,7 +670,7 @@ export default function App() {
 
                   <div className="relative">
                     <label className="block text-sm font-semibold text-gray-700 mb-1.5">4. 실행 일시</label>
-                    <div onClick={openDatePicker} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white cursor-pointer">
+                    <div onClick={openDatePicker} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm bg-white cursor-pointer flex justify-between">
                       <span className={confirmedDateTime ? 'text-gray-900 font-bold' : 'text-gray-400'}>{confirmedDateTime ? new Date(confirmedDateTime).toLocaleString() : '클릭하여 일시 선택'}</span>
                     </div>
 
