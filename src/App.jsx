@@ -23,7 +23,32 @@ export default function App() {
   const [isLoginProcessing, setIsLoginProcessing] = useState(false);
   const [tasks, setTasks] = useState([]);
 
-  // ⭐️ productId 단일 선택에서 products 배열 다중 선택으로 업그레이드
+  // --- 상품 목록 필터 및 페이지네이션 상태 ---
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    name: '',
+    sku: '',
+    tag: '',
+    status: [],
+    display: 'all'
+  });
+  const [pagingAfter, setPagingAfter] = useState(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // --- 상품 정보 수정 모달 상태 ---
+  const [productEditModal, setProductEditModal] = useState({
+    isOpen: false,
+    id: '',
+    name: '',
+    price: '',
+    stockType: 'unlimited',
+    stockCount: '',
+    isDisplayed: 'true',
+    status: 'onSale',
+    description: ''
+  });
+
+  // --- 스케줄러 폼 상태 ---
   const [scheduleForm, setScheduleForm] = useState({
     products: [],
     status: 'onSale',
@@ -34,39 +59,29 @@ export default function App() {
   const [isProductSelectOpen, setIsProductSelectOpen] = useState(false);
   const [recentProducts, setRecentProducts] = useState([]);
 
-  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+  // ⭐️ 날짜/시간 인라인 관리를 위한 State
   const [pickerDate, setPickerDate] = useState('');
   const [pickerTime, setPickerTime] = useState('');
   const [confirmedDateTime, setConfirmedDateTime] = useState('');
 
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
+  // --- 스케줄러 수정 모달 상태 ---
   const [editModal, setEditModal] = useState({
-    isOpen: false, task: null, status: '', isDisplayed: 'true', date: '', time: '', isDatePickerOpen: false
+    isOpen: false, task: null, status: '', isDisplayed: 'true', date: '', time: ''
   });
 
-  // ⭐️ 외부 클릭 감지를 위한 Refs
   const productSelectRef = useRef(null);
-  const datePickerRef = useRef(null);
-  const editDatePickerRef = useRef(null);
 
-  // ⭐️ 외부 영역 클릭 시 드랍다운/모달을 닫아주는 범용 이벤트 리스너
+  // 외부 영역 클릭 감지 (상품 드랍다운 닫기 용도)
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (productSelectRef.current && !productSelectRef.current.contains(event.target)) {
         setIsProductSelectOpen(false);
       }
-      if (datePickerRef.current && !datePickerRef.current.contains(event.target)) {
-        setIsDatePickerOpen(false);
-      }
-      if (editDatePickerRef.current && !editDatePickerRef.current.contains(event.target)) {
-        setEditModal(prev => ({ ...prev, isDatePickerOpen: false }));
-      }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const showToast = (message, type = 'info') => {
@@ -161,7 +176,7 @@ export default function App() {
           } else {
             const autoId = await autoFetchSellerId(accessToken);
             if (autoId) { finalSellerId = autoId; } 
-            else { showToast('보안 정책으로 셀러 ID 자동 탐지에 실패했습니다. 대시보드에서 수동으로 입력해주세요.', 'info'); }
+            else { showToast('보안 정책으로 셀러 ID 자동 탐지에 실패했습니다. 수동으로 입력해주세요.', 'info'); }
           }
 
           setToken(accessToken);
@@ -236,23 +251,55 @@ export default function App() {
     showToast('로그아웃 되었습니다.');
   };
 
-  const fetchProductsWithArgs = async (currentToken, currentSellerId, currentMode) => {
+  const fetchProductsWithArgs = async (currentToken, currentSellerId, currentMode, isLoadMore = false) => {
     if (currentMode === 'seller' && !currentSellerId) return;
-    setIsLoading(true);
+    
+    if (isLoadMore) setIsLoadingMore(true);
+    else setIsLoading(true);
+
     try {
-      const url = `https://cand-scheduler.vercel.app/api/proxy?endpoint=products&limit=100`;
+      const params = new URLSearchParams();
+      params.append('endpoint', 'products');
+      params.append('limit', '50'); 
+      params.append('order', 'DESC');
+      
+      if (isLoadMore && pagingAfter) params.append('after', pagingAfter);
+
+      if (filters.name) params.append('query', filters.name);
+      if (filters.sku) params.append('sku', filters.sku);
+      if (filters.tag) params.append('tag', filters.tag);
+      
+      const searchSellerId = currentMode === 'seller' ? currentSellerId : (currentSellerId || filters.sellerId);
+      if (searchSellerId) params.append('sellerId', searchSellerId);
+
+      if (filters.status.length > 0) {
+        filters.status.forEach(s => params.append('status', s));
+      }
+      if (filters.display !== 'all') {
+        params.append('isDisplayed', filters.display);
+      }
+
+      const url = `https://cand-scheduler.vercel.app/api/proxy?${params.toString()}`;
       const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(currentToken) });
+      
+      if (!res.ok) throw new Error('목록 로드 실패');
+      
       const data = await res.json();
       const list = data.data || [];
-      let filtered = list;
-      if (currentSellerId) {
-        filtered = list.filter(p => (p.sellerId || p.userId || p.creatorId) === currentSellerId);
+      
+      if (isLoadMore) {
+        setProducts(prev => [...prev, ...list]);
+      } else {
+        setProducts(list);
       }
-      setProducts(filtered);
+
+      setPagingAfter(data.paging && data.paging.after ? data.paging.after : null);
+
     } catch (err) {
-      showToast('상품 목록 로드에 실패했습니다.', 'error');
+      showToast('상품 목록을 불러오는 데 실패했습니다.', 'error');
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
@@ -272,16 +319,59 @@ export default function App() {
   useEffect(() => {
     if (isAuthenticated && token) {
       if (loginMode === 'admin' || sellerId) {
-        fetchProductsWithArgs(token, sellerId, loginMode);
+        fetchProductsWithArgs(token, sellerId, loginMode, false);
       }
       fetchScheduledTasks(token);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, token, sellerId, loginMode]);
 
-  const fetchProducts = () => fetchProductsWithArgs(token, sellerId, loginMode);
+  const resetFilters = () => setFilters({ name: '', sku: '', tag: '', status: [], display: 'all' });
 
-  // ⭐️ 상품 선택 시 카드 목록에 추가하고 인풋을 리셋하는 로직
+  const applyFilters = () => {
+    setPagingAfter(null);
+    fetchProductsWithArgs(token, sellerId, loginMode, false);
+  };
+
+  const loadMoreProducts = () => fetchProductsWithArgs(token, sellerId, loginMode, true);
+  const fetchProducts = () => fetchProductsWithArgs(token, sellerId, loginMode, false);
+
+  const openProductEditModal = (p) => {
+    setProductEditModal({
+      isOpen: true, id: p.id, name: p.name || '', price: p.price || 0,
+      stockType: p.stockCount === null || p.stockCount === undefined ? 'unlimited' : 'limited',
+      stockCount: p.stockCount || '', isDisplayed: p.isDisplayed !== false ? 'true' : 'false',
+      status: p.status || 'onSale', description: p.description || ''
+    });
+  };
+
+  const closeProductEditModal = () => setProductEditModal(prev => ({ ...prev, isOpen: false }));
+
+  const handleUpdateProduct = async () => {
+    const { id, name, price, stockType, stockCount, isDisplayed, status, description } = productEditModal;
+    const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
+
+    const updateData = {
+      name: name, price: Number(price), stockCount: finalStockCount, status: status,
+      description: description, isDisplayed: isDisplayed === 'true'
+    };
+
+    try {
+      showToast('상품 정보를 갱신 중입니다...', 'info');
+      const res = await fetch(`https://cand-scheduler.vercel.app/api/proxy?endpoint=products/${id}`, {
+        method: 'PUT', headers: getAuthHeaders(token), body: JSON.stringify(updateData)
+      });
+      
+      if (!res.ok) throw new Error();
+      
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updateData } : p));
+      closeProductEditModal();
+      showToast('상품이 성공적으로 수정되었습니다.', 'success');
+    } catch (err) {
+      showToast('상품 수정에 실패했습니다.', 'error');
+    }
+  };
+
   const handleSelectProduct = (product) => {
     if (!scheduleForm.products.find(p => p.id === product.id)) {
       setScheduleForm({ ...scheduleForm, products: [...scheduleForm.products, product] });
@@ -294,7 +384,6 @@ export default function App() {
     localStorage.setItem('cand_recent_products', JSON.stringify(newRecents));
   };
 
-  // ⭐️ 선택된 상품 카드 삭제 로직
   const handleRemoveProduct = (productId) => {
     setScheduleForm({
       ...scheduleForm,
@@ -302,7 +391,6 @@ export default function App() {
     });
   };
 
-  // ⭐️ 인풋박스 내 Enter 키 동작 (제일 상단 항목 자동 선택)
   const handleProductKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -313,23 +401,16 @@ export default function App() {
     }
   };
 
-  // ⭐️ 날짜 선택기 열기 (현재 시간 기준 세팅)
-  const openDatePicker = () => {
-    const initialDateObj = confirmedDateTime ? new Date(confirmedDateTime) : new Date();
-    const tzoffset = initialDateObj.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(initialDateObj.getTime() - tzoffset)).toISOString().slice(0, 16);
-    const [d, t] = localISOTime.split('T');
-    
-    setPickerDate(d);
-    setPickerTime(t);
-    setIsDatePickerOpen(true);
-  };
-
+  // ⭐️ 예약 전송 1단계 검증 로직
   const handlePreSubmit = (e) => {
     e.preventDefault();
     if (scheduleForm.products.length === 0) return showToast('최소 1개 이상의 상품을 선택해주세요.', 'error');
-    if (!confirmedDateTime) return showToast('실행 일시를 설정해주세요.', 'error');
-    if (new Date(confirmedDateTime).getTime() <= Date.now()) return showToast('실행 시간은 현재 시간 이후여야 합니다.', 'error');
+    if (!pickerDate || !pickerTime) return showToast('실행 날짜와 시간을 모두 설정해주세요.', 'error');
+    
+    const combinedDateTime = `${pickerDate}T${pickerTime}`;
+    if (new Date(combinedDateTime).getTime() <= Date.now()) return showToast('실행 시간은 현재 시간 이후여야 합니다.', 'error');
+    
+    setConfirmedDateTime(combinedDateTime);
     setIsConfirmModalOpen(true);
   };
 
@@ -338,7 +419,6 @@ export default function App() {
     showToast('예약 전송 중...', 'info');
     try {
       const newTasks = [];
-      // ⭐️ 선택된 여러 상품들에 대해 병렬로 API 전송
       await Promise.all(scheduleForm.products.map(async (prod) => {
         const newTaskId = Math.random().toString(36).substr(2, 9);
         const res = await fetch(SCHEDULER_API_URL, {
@@ -360,7 +440,11 @@ export default function App() {
       }));
 
       setTasks(prev => [...newTasks, ...prev]);
+      
+      // 입력값 초기화
       setConfirmedDateTime('');
+      setPickerDate('');
+      setPickerTime('');
       setScheduleForm({ ...scheduleForm, products: [] });
       showToast(`${scheduleForm.products.length}건의 상품 예약이 전송되었습니다!`, 'success');
     } catch (err) { 
@@ -388,12 +472,12 @@ export default function App() {
 
     setEditModal({
       isOpen: true, task, status: task.newStatus,
-      isDisplayed: task.newIsDisplayed ? 'true' : 'false', date, time, isDatePickerOpen: false
+      isDisplayed: task.newIsDisplayed ? 'true' : 'false', date, time
     });
   };
 
   const handleConfirmEdit = async () => {
-    if (!editModal.date || !editModal.time) return showToast('수정할 날짜와 시간을 확인해주세요.', 'error');
+    if (!editModal.date || !editModal.time) return showToast('수정할 날짜와 시간을 모두 입력해주세요.', 'error');
     const executeTimeIso = new Date(`${editModal.date}T${editModal.time}`).toISOString();
     
     try {
@@ -511,7 +595,7 @@ export default function App() {
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 bg-white border-b flex items-center justify-between px-6 flex-shrink-0 relative">
+        <header className="h-16 bg-white border-b flex items-center justify-between px-6 flex-shrink-0 relative z-30">
           <div className="absolute top-0 left-0 w-full h-1" style={{ backgroundColor: '#2563eb' }}></div>
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="text-xl font-bold">≡</button>
@@ -526,48 +610,145 @@ export default function App() {
         <div className="flex-1 overflow-auto p-6 bg-gray-50">
           {activeTab === 'productList' && (
             <div className="max-w-6xl mx-auto space-y-4">
-              <div className="bg-white p-6 rounded-xl shadow-sm border">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-bold text-lg">{loginMode === 'admin' && !sellerId ? '전체 상품 목록' : '내 판매 상품 목록'}</h3>
-                  {(loginMode === 'admin' || sellerId) && <button onClick={fetchProducts} disabled={isLoading} className="px-4 py-2 bg-gray-100 text-sm font-bold rounded-lg hover:bg-gray-200 transition">새로고침</button>}
+              
+              <div className="flex justify-between items-end mb-2">
+                <h3 className="font-bold text-lg">{loginMode === 'admin' && !sellerId ? '전체 상품 목록' : '내 판매 상품 목록'}</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setIsFilterOpen(!isFilterOpen)} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-bold hover:bg-gray-50 transition">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                    검색 필터
+                  </button>
+                  <button onClick={applyFilters} disabled={isLoading} className="p-2 border border-gray-300 bg-white text-gray-500 hover:text-blue-600 hover:border-blue-300 rounded-lg transition" title="새로고침">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  </button>
                 </div>
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-left bg-white text-sm">
-                    <thead className="bg-gray-50 border-b text-gray-500">
-                      <tr><th className="p-4">상품명</th><th className="p-4">가격</th><th className="p-4 text-center">상태</th><th className="p-4 text-center">진열</th></tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {(loginMode === 'seller' && !sellerId) ? (
-                        <tr><td colSpan="4" className="p-12 text-center text-gray-500 bg-gray-50">
-                          <p className="mb-2 font-bold text-gray-700 text-base">⚠️ 셀러 ID 자동 탐지에 실패했습니다.</p>
-                          <p className="text-sm mb-6 text-gray-500">백엔드 API 권한 문제로 아이디를 가져오지 못했습니다. 아래에 직접 입력해주세요.</p>
-                          <div className="flex justify-center max-w-sm mx-auto shadow-sm rounded-lg overflow-hidden">
-                            <input type="text" id="manualInputFallback" placeholder="ex) CS:P8XLJRM3" className="w-full px-4 py-2.5 border border-gray-300 outline-none" />
-                            <button onClick={() => handleManualSaveSellerId(document.getElementById('manualInputFallback').value)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 transition shrink-0">저장 및 조회</button>
-                          </div>
-                        </td></tr>
-                      ) : isLoading ? (
-                        <tr><td colSpan="4" className="p-16 text-center bg-gray-50/50">
-                          <div className="flex flex-col items-center justify-center space-y-4">
-                            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
-                            <p className="font-bold text-blue-600 animate-pulse">상품 데이터를 안전하게 불러오는 중입니다...</p>
-                          </div>
-                        </td></tr>
-                      ) : products.length === 0 ? (
-                        <tr><td colSpan="4" className="p-12 text-center text-gray-400">등록된 상품이 없습니다.</td></tr>
-                      ) : (
-                        products.map(p => (
-                          <tr key={p.id} className="hover:bg-gray-50 transition-colors">
-                            <td className="p-4 font-bold">{p.name}<div className="text-xs text-gray-400 font-mono mt-1">{p.id}</div></td>
-                            <td className="p-4">{p.price?.toLocaleString()} {p.currency}</td>
-                            <td className="p-4 text-center"><span className={`px-2 py-1 rounded-full text-xs font-bold ${p.status === 'onSale' ? 'bg-green-100 text-green-700' : 'bg-gray-100'}`}>{translateStatus(p.status)}</span></td>
-                            <td className="p-4 text-center">{p.isDisplayed ? <span className="text-blue-600 font-bold">진열중</span> : <span className="text-gray-400">숨김</span>}</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+              </div>
+
+              {/* 필터 패널 */}
+              {isFilterOpen && (
+                <div className="bg-white border border-gray-200 p-6 rounded-xl shadow-sm mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5">상품 이름</label>
+                        <input type="text" value={filters.name} onChange={e => setFilters({...filters, name: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none" placeholder="상품명 검색"/>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5">SKU 번호</label>
+                        <input type="text" value={filters.sku} onChange={e => setFilters({...filters, sku: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none font-mono" placeholder="SKU 입력"/>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1.5">태그</label>
+                        <input type="text" value={filters.tag} onChange={e => setFilters({...filters, tag: e.target.value})} className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:border-blue-500 outline-none" placeholder="태그 입력"/>
+                      </div>
+                    </div>
+
+                    <div className="col-span-full h-px bg-gray-100 my-1"></div>
+
+                    <div className="lg:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 mb-2">판매 상태</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['scheduled', 'onSale', 'soldOut', 'completed'].map(val => (
+                          <label key={val} className={`cursor-pointer border rounded px-3 py-1.5 text-xs font-medium transition ${filters.status.includes(val) ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-gray-50'}`}>
+                            <input type="checkbox" className="hidden" checked={filters.status.includes(val)} onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFilters(prev => ({...prev, status: checked ? [...prev.status, val] : prev.status.filter(s => s !== val)}));
+                            }}/> {translateStatus(val)}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 mb-2">진열 상태</label>
+                      <div className="flex gap-4">
+                        {[ {label: '전체', val: 'all'}, {label: '진열 중', val: 'true'}, {label: '숨김', val: 'false'} ].map(opt => (
+                          <label key={opt.val} className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
+                            <input type="radio" name="displayFilter" value={opt.val} checked={filters.display === opt.val} onChange={e => setFilters({...filters, display: e.target.value})} className="accent-blue-600"/> {opt.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-end gap-2">
+                    <button onClick={resetFilters} className="px-6 py-2 bg-white border border-gray-300 text-gray-600 font-bold rounded-lg hover:bg-gray-50 transition text-sm">조건 초기화</button>
+                    <button onClick={applyFilters} className="px-8 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-sm transition text-sm">필터 적용하여 검색</button>
+                  </div>
                 </div>
+              )}
+
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden min-h-[300px] flex flex-col">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200 text-gray-500">
+                    <tr>
+                      <th className="px-6 py-4 font-bold uppercase w-16">Img</th>
+                      <th className="px-6 py-4 font-bold uppercase">상품 정보 (이름/SKU)</th>
+                      <th className="px-6 py-4 font-bold uppercase text-right">가격</th>
+                      <th className="px-6 py-4 font-bold uppercase text-center">재고</th>
+                      <th className="px-6 py-4 font-bold uppercase text-center">상태</th>
+                      <th className="px-6 py-4 font-bold uppercase text-center">관리</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(loginMode === 'seller' && !sellerId) ? (
+                      <tr><td colSpan="6" className="p-12 text-center text-gray-500 bg-gray-50">
+                        <p className="mb-2 font-bold text-gray-700 text-base">⚠️ 셀러 ID 자동 탐지에 실패했습니다.</p>
+                        <p className="text-sm mb-6 text-gray-500">백엔드 API 권한 문제로 아이디를 가져오지 못했습니다. 아래에 직접 입력해주세요.</p>
+                        <div className="flex justify-center max-w-sm mx-auto shadow-sm rounded-lg overflow-hidden">
+                          <input type="text" id="manualInputFallback" placeholder="ex) CS:P8XLJRM3" className="w-full px-4 py-2.5 border border-gray-300 outline-none" />
+                          <button onClick={() => handleManualSaveSellerId(document.getElementById('manualInputFallback').value)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 transition shrink-0">저장 및 조회</button>
+                        </div>
+                      </td></tr>
+                    ) : isLoading && products.length === 0 ? (
+                      <tr><td colSpan="6" className="p-20 text-center bg-gray-50/50">
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                          <p className="font-bold text-blue-600 animate-pulse">데이터를 불러오는 중입니다...</p>
+                        </div>
+                      </td></tr>
+                    ) : products.length === 0 ? (
+                      <tr><td colSpan="6" className="p-16 text-center text-gray-400 font-medium">조회된 상품이 없습니다.</td></tr>
+                    ) : (
+                      products.map(p => {
+                        const imgUrl = p.images?.mobile?.[0] || p.images?.web?.[0] || '';
+                        return (
+                        <tr key={p.id} className="hover:bg-blue-50/20 transition-colors group">
+                          <td className="px-6 py-3">
+                            {imgUrl ? <img src={imgUrl} className="w-10 h-10 rounded object-cover border border-gray-200" alt="상품" /> : <div className="w-10 h-10 bg-gray-100 rounded flex items-center justify-center text-gray-400 border border-gray-200"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>}
+                          </td>
+                          <td className="px-6 py-3">
+                            <div className="text-sm font-bold text-gray-800 group-hover:text-blue-600 transition truncate max-w-xs">{p.name || '이름 없음'}</div>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 rounded border border-slate-200 font-mono">{p.id}</span>
+                              {p.sku && <span className="text-[10px] text-gray-400 font-mono">SKU: {p.sku}</span>}
+                            </div>
+                          </td>
+                          <td className="px-6 py-3 text-right text-sm font-mono font-medium text-gray-600">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
+                          <td className="px-6 py-3 text-center text-sm font-mono text-gray-600">
+                            {p.stockCount !== null && p.stockCount !== undefined ? p.stockCount.toLocaleString() : <span className="text-xs text-gray-400 font-medium">무제한</span>}
+                          </td>
+                          <td className="px-6 py-3 text-center">
+                            <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${p.status === 'onSale' ? 'bg-green-100 text-green-700' : p.status === 'soldOut' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>{translateStatus(p.status)}</span>
+                            {!p.isDisplayed && <div className="text-[10px] text-gray-400 mt-1 font-bold flex justify-center items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg> 숨김</div>}
+                          </td>
+                          <td className="px-6 py-3 text-center">
+                            <button onClick={() => openProductEditModal(p)} className="text-gray-400 hover:text-blue-600 border border-transparent hover:border-blue-200 hover:bg-white px-3 py-1.5 rounded transition text-xs font-bold flex items-center justify-center mx-auto gap-1">
+                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> 수정
+                            </button>
+                          </td>
+                        </tr>
+                        )
+                      })
+                    )}
+                  </tbody>
+                </table>
+                {pagingAfter && (
+                  <div className="p-4 border-t border-gray-100 text-center bg-gray-50">
+                    <button onClick={loadMoreProducts} disabled={isLoadingMore} className="px-6 py-2 bg-white border border-gray-300 rounded-full text-sm font-bold text-gray-600 hover:bg-gray-100 hover:border-gray-400 transition shadow-sm disabled:opacity-50">
+                      {isLoadingMore ? <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div> 로딩 중...</span> : '더 보기 (Load More)'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -578,7 +759,6 @@ export default function App() {
                   <h3 className="font-bold text-lg mb-6">새 상태 변경 예약 등록</h3>
                   <form onSubmit={handlePreSubmit} className="space-y-5">
                     
-                    {/* ⭐️ 개선된 상품 선택 로직 (다중 선택 및 외부 클릭 감지 적용) */}
                     <div className="relative" ref={productSelectRef}>
                       <label className="block text-sm font-bold text-gray-700 mb-2">1. 대상 상품 선택 (다중 선택 가능)</label>
                       <input 
@@ -587,23 +767,22 @@ export default function App() {
                         onFocus={() => setIsProductSelectOpen(true)}
                         onKeyDown={handleProductKeyDown}
                         placeholder="텍스트 입력 후 엔터(Enter) 또는 목록 클릭" 
-                        className="w-full px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
                       />
                       
                       {isProductSelectOpen && (
-                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border shadow-xl rounded-lg z-40 max-h-56 overflow-y-auto divide-y">
+                        <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 shadow-xl rounded-lg z-40 max-h-56 overflow-y-auto divide-y">
                           {productSearchTerm === '' && recentProducts.length > 0 && (
                             <div className="p-2 border-b bg-gray-50 text-xs font-bold text-gray-500">최근 선택 항목</div>
                           )}
                           {products.filter(p => p.name.includes(productSearchTerm) || p.id.includes(productSearchTerm)).map(p => (
                             <div key={p.id} onClick={() => handleSelectProduct(p)} className="p-3 hover:bg-blue-50 cursor-pointer text-sm">
-                              <b>{p.name}</b> <span className="text-xs text-gray-400 ml-2">({p.id})</span>
+                              <b>{p.name}</b> <span className="text-xs text-gray-400 ml-2 font-mono">({p.id})</span>
                             </div>
                           ))}
                         </div>
                       )}
 
-                      {/* ⭐️ 선택된 상품 카드 출력 (삭제 버튼 포함) */}
                       {scheduleForm.products.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3 p-3 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                           {scheduleForm.products.map(prod => (
@@ -621,54 +800,47 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2">2. 변경할 상태</label>
-                        <select value={scheduleForm.status} onChange={e => setScheduleForm({...scheduleForm, status: e.target.value})} className="w-full px-4 py-2.5 border rounded-lg"><option value="onSale">판매중</option><option value="soldOut">품절</option><option value="completed">판매종료</option></select>
+                        <select value={scheduleForm.status} onChange={e => setScheduleForm({...scheduleForm, status: e.target.value})} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"><option value="onSale">판매중</option><option value="soldOut">품절</option><option value="completed">판매종료</option></select>
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-gray-700 mb-2">3. 진열 여부</label>
-                        <select value={scheduleForm.isDisplayed} onChange={e => setScheduleForm({...scheduleForm, isDisplayed: e.target.value})} className="w-full px-4 py-2.5 border rounded-lg"><option value="true">진열함</option><option value="false">진열안함</option></select>
+                        <select value={scheduleForm.isDisplayed} onChange={e => setScheduleForm({...scheduleForm, isDisplayed: e.target.value})} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"><option value="true">진열함</option><option value="false">진열안함</option></select>
                       </div>
                     </div>
                     
-                    {/* ⭐️ 개선된 예약 일시 팝오버 애드온 UI */}
-                    <div className="relative" ref={datePickerRef}>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">4. 예약 실행 일시</label>
-                      <div 
-                        onClick={openDatePicker} 
-                        className="w-full px-4 py-2.5 border rounded-lg bg-white cursor-pointer hover:border-blue-400 transition flex justify-between items-center group"
-                      >
-                        <span className={confirmedDateTime ? 'text-gray-900 font-bold' : 'text-gray-400'}>
-                          {confirmedDateTime ? new Date(confirmedDateTime).toLocaleString() : '클릭하여 예약 시간을 설정하세요'}
-                        </span>
-                        <span className="text-gray-400 group-hover:text-blue-500">📅</span>
+                    {/* ⭐️ 혁신적인 날짜/시간 인라인 UI 도입 */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">4. 예약 날짜</label>
+                        <input 
+                          type="date" 
+                          value={pickerDate} 
+                          onChange={e => setPickerDate(e.target.value)} 
+                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600" 
+                        />
                       </div>
-
-                      {isDatePickerOpen && (
-                        <div className="absolute left-0 mt-2 bg-white border border-gray-200 shadow-2xl rounded-2xl p-5 w-72 z-50">
-                          <h4 className="text-sm font-bold text-gray-800 mb-4 border-b pb-2">실행 일시 세팅</h4>
-                          <div className="space-y-4 mb-6">
-                            <div>
-                              <label className="block text-xs font-bold text-gray-500 mb-1.5">선택된 날짜</label>
-                              <input type="date" value={pickerDate} onChange={e => setPickerDate(e.target.value)} className="w-full border border-gray-300 px-3 py-2 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-bold text-gray-500 mb-1.5">선택된 시간</label>
-                              <input type="time" value={pickerTime} onChange={e => setPickerTime(e.target.value)} className="w-full border border-gray-300 px-3 py-2 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                          </div>
+                      <div>
+                        <label className="block text-sm font-bold text-gray-700 mb-2">5. 예약 시간</label>
+                        <div className="flex items-center gap-2">
+                          <input 
+                            type="time" 
+                            value={pickerTime} 
+                            onChange={e => setPickerTime(e.target.value)} 
+                            className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-600"
+                          />
                           <button 
                             type="button" 
-                            onClick={() => {
-                              if(!pickerDate || !pickerTime) return showToast('날짜와 시간을 지정해주세요.', 'warning');
-                              setConfirmedDateTime(`${pickerDate}T${pickerTime}`);
-                              setIsDatePickerOpen(false);
-                            }} 
-                            className="w-full py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition shadow-sm flex items-center justify-center gap-2"
+                            onClick={(e) => {
+                              // 네이티브 시간 팝업을 닫기 위해 포커스 강제 해제
+                              const timeInput = e.currentTarget.previousElementSibling;
+                              if (timeInput) timeInput.blur();
+                            }}
+                            className="px-4 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition shadow-sm font-bold whitespace-nowrap"
                           >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7"></path></svg>
-                            ✅ 이 시간으로 결정
+                            ✅ 확인
                           </button>
                         </div>
-                      )}
+                      </div>
                     </div>
 
                     <button type="submit" className="w-full py-4 text-white font-bold rounded-xl shadow-lg mt-4 transition hover:opacity-90 text-lg" style={{ backgroundColor: '#2563eb' }}>
@@ -720,6 +892,79 @@ export default function App() {
         </div>
       </main>
 
+      {/* 상품 수정 (Product Edit) 모달 */}
+      {productEditModal.isOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-blue-50">
+              <h3 className="text-lg font-bold text-blue-900">상품 정보 수정</h3>
+              <button onClick={closeProductEditModal} className="text-gray-400 hover:text-gray-800 transition"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            <div className="p-6 space-y-5 overflow-y-auto bg-white flex-1">
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1.5 block">상품명</label>
+                <input type="text" value={productEditModal.name} onChange={e => setProductEditModal({...productEditModal, name: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm outline-none focus:border-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1.5 block">가격</label>
+                  <input type="number" value={productEditModal.price} onChange={e => setProductEditModal({...productEditModal, price: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono outline-none focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 mb-1.5 block">재고 설정</label>
+                  <div className="flex items-center gap-3 mt-2 mb-2">
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer text-gray-700 font-medium">
+                      <input type="radio" name="stockType" value="unlimited" checked={productEditModal.stockType === 'unlimited'} onChange={e => setProductEditModal({...productEditModal, stockType: e.target.value, stockCount: ''})} className="accent-blue-600" /> 무제한
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm cursor-pointer text-gray-700 font-medium">
+                      <input type="radio" name="stockType" value="limited" checked={productEditModal.stockType === 'limited'} onChange={e => setProductEditModal({...productEditModal, stockType: e.target.value})} className="accent-blue-600" /> 수량지정
+                    </label>
+                  </div>
+                  {productEditModal.stockType === 'limited' && (
+                    <input type="number" value={productEditModal.stockCount} onChange={e => setProductEditModal({...productEditModal, stockCount: e.target.value})} className="w-full border border-gray-300 rounded-lg p-2.5 text-sm font-mono outline-none focus:border-blue-500 bg-gray-50" placeholder="수량 입력" />
+                  )}
+                </div>
+              </div>
+              
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <h4 className="text-sm font-bold text-gray-700 mb-3 border-b border-gray-200 pb-2">표시 및 상태 설정</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-2 block">진열 여부</label>
+                    <div className="flex items-center gap-4 bg-white p-2.5 rounded-lg border border-gray-200">
+                      <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-gray-700">
+                        <input type="radio" name="editIsDisplayed" value="true" checked={productEditModal.isDisplayed === 'true'} onChange={e => setProductEditModal({...productEditModal, isDisplayed: e.target.value})} className="accent-blue-600" /> 진열하기
+                      </label>
+                      <label className="flex items-center gap-2 text-sm cursor-pointer font-medium text-gray-700">
+                        <input type="radio" name="editIsDisplayed" value="false" checked={productEditModal.isDisplayed === 'false'} onChange={e => setProductEditModal({...productEditModal, isDisplayed: e.target.value})} className="accent-blue-600" /> 숨김
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-gray-500 mb-2 block">판매 상태</label>
+                    <div className="grid grid-cols-2 gap-2 bg-white p-2.5 rounded-lg border border-gray-200">
+                      {[ {l:'판매 예정', v:'scheduled'}, {l:'판매 중', v:'onSale'}, {l:'품절', v:'soldOut'}, {l:'판매 종료', v:'completed'} ].map(s => (
+                        <label key={s.v} className="flex items-center gap-2 text-sm cursor-pointer font-medium text-gray-700 hover:bg-gray-50 p-1 rounded">
+                          <input type="radio" name="editStatus" value={s.v} checked={productEditModal.status === s.v} onChange={e => setProductEditModal({...productEditModal, status: e.target.value})} className="accent-blue-600" /> {s.l}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1.5 block">상세 설명</label>
+                <textarea value={productEditModal.description} onChange={e => setProductEditModal({...productEditModal, description: e.target.value})} className="w-full border border-gray-300 rounded-lg p-3 text-sm outline-none focus:border-blue-500 resize-none" rows="3"></textarea>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-2 bg-gray-50 shrink-0">
+              <button onClick={closeProductEditModal} className="px-5 py-2.5 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition font-bold">취소</button>
+              <button onClick={handleUpdateProduct} className="px-6 py-2.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md transition font-bold">변경사항 즉시 저장</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 예약 다중 전송 확인 모달 */}
       {isConfirmModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4">
@@ -739,7 +984,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 예약 수정 모달 */}
+      {/* 스케줄러 예약 수정 모달 */}
       {editModal.isOpen && (
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
@@ -747,59 +992,59 @@ export default function App() {
             <div className="space-y-5 mb-6">
               <div>
                 <label className="block text-xs font-bold text-gray-500 mb-1">대상 상품</label>
-                <div className="w-full bg-gray-50 p-2.5 text-sm rounded-lg text-gray-700 font-bold border">{editModal.task.productName}</div>
+                <div className="w-full bg-gray-50 p-2.5 text-sm rounded-lg text-gray-700 font-bold border border-gray-200">{editModal.task.productName}</div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1">상태 변경</label>
-                  <select value={editModal.status} onChange={e => setEditModal({...editModal, status: e.target.value})} className="w-full border p-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                  <select value={editModal.status} onChange={e => setEditModal({...editModal, status: e.target.value})} className="w-full border border-gray-300 p-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="scheduled">판매예정</option><option value="onSale">판매중</option><option value="soldOut">품절</option><option value="completed">판매종료</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1">진열 변경</label>
-                  <select value={editModal.isDisplayed} onChange={e => setEditModal({...editModal, isDisplayed: e.target.value})} className="w-full border p-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                  <select value={editModal.isDisplayed} onChange={e => setEditModal({...editModal, isDisplayed: e.target.value})} className="w-full border border-gray-300 p-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="true">진열함 (표시)</option><option value="false">진열안함 (숨김)</option>
                   </select>
                 </div>
               </div>
               
-              {/* ⭐️ 수정 모달 내부의 통일된 날짜 선택 UI 애드온 */}
-              <div className="relative" ref={editDatePickerRef}>
-                <label className="block text-xs font-bold text-gray-500 mb-1">일시 변경</label>
-                <div 
-                  onClick={() => setEditModal({...editModal, isDatePickerOpen: !editModal.isDatePickerOpen})} 
-                  className="w-full border p-2.5 text-sm rounded-lg bg-white cursor-pointer flex justify-between items-center hover:border-blue-400 transition"
-                >
-                  <span className="font-bold">{editModal.date && editModal.time ? new Date(`${editModal.date}T${editModal.time}`).toLocaleString() : '시간 설정'}</span>
-                  <span className="text-gray-400">📅</span>
+              {/* ⭐️ 수정 모달에도 인라인 날짜/시간 선택기 적용 */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">날짜 변경</label>
+                  <input 
+                    type="date" 
+                    value={editModal.date} 
+                    onChange={e => setEditModal({...editModal, date: e.target.value})} 
+                    className="w-full border border-gray-300 px-3 py-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
-
-                {editModal.isDatePickerOpen && (
-                  <div className="absolute left-0 mt-2 bg-white border border-gray-200 shadow-2xl rounded-2xl p-5 w-72 z-50">
-                    <div className="space-y-4 mb-5">
-                      <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">날짜 선택</label>
-                        <input type="date" value={editModal.date} onChange={e => setEditModal({...editModal, date: e.target.value})} className="w-full border px-3 py-2 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">시간 선택</label>
-                        <input type="time" value={editModal.time} onChange={e => setEditModal({...editModal, time: e.target.value})} className="w-full border px-3 py-2 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/>
-                      </div>
-                    </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">시간 변경</label>
+                  <div className="flex items-center gap-1.5">
+                    <input 
+                      type="time" 
+                      value={editModal.time} 
+                      onChange={e => setEditModal({...editModal, time: e.target.value})} 
+                      className="flex-1 border border-gray-300 px-3 py-2.5 text-sm rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                     <button 
                       type="button"
-                      onClick={() => setEditModal({...editModal, isDatePickerOpen: false})} 
-                      className="w-full py-2 bg-blue-600 text-white font-bold rounded-lg shadow-sm hover:bg-blue-700 transition"
+                      onClick={(e) => {
+                        const timeInput = e.currentTarget.previousElementSibling;
+                        if (timeInput) timeInput.blur();
+                      }} 
+                      className="px-3 py-2.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg shadow-sm hover:bg-blue-100 transition font-bold text-xs whitespace-nowrap"
                     >
-                      ✅ 이 시간으로 결정
+                      ✅ 확인
                     </button>
                   </div>
-                )}
+                </div>
               </div>
             </div>
-            <div className="flex justify-end gap-2 border-t pt-4">
-              <button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-5 py-2.5 bg-gray-100 rounded-lg font-bold text-sm hover:bg-gray-200 transition">취소</button>
+            <div className="flex justify-end gap-2 border-t border-gray-200 pt-4">
+              <button onClick={() => setEditModal({...editModal, isOpen: false})} className="px-5 py-2.5 bg-gray-100 rounded-lg font-bold text-sm hover:bg-gray-200 transition border border-gray-200">취소</button>
               <button onClick={handleConfirmEdit} className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-sm shadow-md hover:bg-blue-700 transition">수정 저장하기</button>
             </div>
           </div>
