@@ -80,16 +80,35 @@ export default function App() {
       if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
       const data = await res.json();
       
-      console.log("🕵️‍♂️ 불러온 내 프로필 정보:", data);
+      console.log("🕵️‍♂️ 1차 불러온 내 프로필 정보:", data);
 
       // profiles 리스트에서 CS:로 시작하는 ID 찾기
-      const sellerProfile = data.profiles?.find(p => p.id && p.id.startsWith('CS:'));
+      let sellerProfileId = data.profiles?.find(p => p.id && p.id.startsWith('CS:'))?.id;
       
-      if (!sellerProfile) {
+      // 3. ⭐️ 만약 1차에서 profiles가 없거나 비어있다면, /users/bulk 로 상세 프로필 재조회
+      if (!sellerProfileId && data.id) {
+        console.log(`🕵️‍♂️ 1차에서 프로필이 비어있어, POST /users/bulk 로 상세 조회를 시도합니다. (Target ID: ${data.id})`);
+        
+        const bulkRes = await fetch(`https://cand-scheduler.vercel.app/api/proxy?endpoint=users/bulk`, {
+          method: 'POST',
+          headers: fetchOptions.headers,
+          body: JSON.stringify({ ids: [data.id] })
+        });
+
+        if (bulkRes.ok) {
+          const bulkData = await bulkRes.json();
+          console.log("🕵️‍♂️ 2차 /users/bulk 상세 조회 결과:", bulkData);
+          
+          const userData = Array.isArray(bulkData) ? bulkData[0] : bulkData;
+          sellerProfileId = userData?.profiles?.find(p => p.id && p.id.startsWith('CS:'))?.id;
+        }
+      }
+
+      if (!sellerProfileId) {
         throw new Error("판매자(CS:) 권한 프로필이 존재하지 않는 계정입니다.");
       }
       
-      return sellerProfile.id;
+      return sellerProfileId;
     } catch (err) {
       showToast(err.message, 'error');
       return null;
