@@ -72,7 +72,7 @@ export default function App() {
       // 1. 표준 유저 정보 API (/users/me) 찔러보기
       let res = await fetch(`https://cand-scheduler.vercel.app/api/proxy?endpoint=users/me`, fetchOptions);
       
-      // 2. 만약 404 에러가 나면 백엔드가 말한 그대로 (/me) 찔러보기 (Fallback)
+      // 2. 만약 404/403 에러가 나면 (/me) 찔러보기 (Fallback)
       if (!res.ok) {
         res = await fetch(`https://cand-scheduler.vercel.app/api/proxy?endpoint=me`, fetchOptions);
       }
@@ -82,10 +82,10 @@ export default function App() {
       
       console.log("🕵️‍♂️ 1차 불러온 내 프로필 정보:", data);
 
-      // profiles 리스트에서 CS:로 시작하는 ID 찾기
-      let sellerProfileId = data.profiles?.find(p => p.id && p.id.startsWith('CS:'))?.id;
+      // profiles 리스트에서 CS:로 시작하는 ID 찾기 (수정: id -> profileId)
+      let sellerProfileId = data.profiles?.find(p => p.profileId && p.profileId.startsWith('CS:'))?.profileId;
       
-      // 3. ⭐️ 만약 1차에서 profiles가 없거나 비어있다면, /users/bulk 로 상세 프로필 재조회
+      // 3. 만약 1차에서 profiles가 비어있다면, /users/bulk 로 상세 프로필 재조회 시도
       if (!sellerProfileId && data.id) {
         console.log(`🕵️‍♂️ 1차에서 프로필이 비어있어, POST /users/bulk 로 상세 조회를 시도합니다. (Target ID: ${data.id})`);
         
@@ -97,22 +97,30 @@ export default function App() {
 
         if (bulkRes.ok) {
           const bulkData = await bulkRes.json();
-          console.log("🕵️‍♂️ 2차 /users/bulk 상세 조회 결과:", bulkData);
-          
           const userData = Array.isArray(bulkData) ? bulkData[0] : bulkData;
-          sellerProfileId = userData?.profiles?.find(p => p.id && p.id.startsWith('CS:'))?.id;
+          sellerProfileId = userData?.profiles?.find(p => p.profileId && p.profileId.startsWith('CS:'))?.profileId;
+        } else {
+          console.warn("⚠️ /users/bulk API 권한 없음 (403 Forbidden). 자동 추출 실패.");
         }
       }
 
-      if (!sellerProfileId) {
-        throw new Error("판매자(CS:) 권한 프로필이 존재하지 않는 계정입니다.");
-      }
-      
-      return sellerProfileId;
+      return sellerProfileId || null; // ⭐️ 에러를 던지지 않고 null 반환하여 우회 진행
     } catch (err) {
-      showToast(err.message, 'error');
+      console.error(err);
       return null;
     }
+  };
+
+  // --- 수동으로 셀러 ID 저장 및 갱신 ---
+  const handleManualSaveSellerId = (inputId) => {
+    const cleanId = (inputId || '').trim();
+    if (!cleanId) return showToast('판매자 아이디를 정확히 입력해주세요.', 'error');
+    
+    setSellerId(cleanId);
+    localStorage.setItem('cand_seller_id', cleanId);
+    showToast(`셀러 ID(${cleanId})가 저장되었습니다. 목록을 불러옵니다.`, 'success');
+    
+    fetchProductsWithArgs(token, cleanId);
   };
 
   // --- OAuth 로그인 콜백 처리 ---
@@ -153,15 +161,16 @@ export default function App() {
           const accessToken = data.access_token;
           let finalSellerId = '';
 
-          // ⭐️ 모드에 따른 분기 처리
           if (savedLoginMode === 'admin') {
             finalSellerId = savedAdminTargetId || '';
           } else {
-            // 판매자 모드: 로그인 직후 프로필 API에서 자동 추출
-            finalSellerId = await autoFetchSellerId(accessToken);
-            if (!finalSellerId) {
-              setIsLoginProcessing(false);
-              return; // 셀러 아이디를 못 찾으면 진행 중단
+            // ⭐️ 판매자 모드: 로그인 직후 프로필 API에서 자동 추출 시도
+            const autoId = await autoFetchSellerId(accessToken);
+            if (autoId) {
+              finalSellerId = autoId;
+              showToast('셀러 ID를 자동으로 확인했습니다.', 'success');
+            } else {
+              showToast('보안 정책으로 셀러 ID 자동 탐지에 실패했습니다. 대시보드에서 수동으로 입력해주세요.', 'info');
             }
           }
 
@@ -174,10 +183,11 @@ export default function App() {
           localStorage.setItem('cand_seller_id', finalSellerId);
           localStorage.setItem('cand_login_mode', savedLoginMode);
 
-          fetchProductsWithArgs(accessToken, finalSellerId);
+          if (finalSellerId) {
+            fetchProductsWithArgs(accessToken, finalSellerId);
+          }
           fetchScheduledTasks(accessToken);
-          showToast(`${savedLoginMode === 'admin' ? '어드민' : '판매자'} 로그인이 완료되었습니다.`, 'success');
-
+          
         } catch (err) {
           showToast(err.message, 'error');
         } finally {
@@ -190,12 +200,16 @@ export default function App() {
         const savedToken = localStorage.getItem('cand_token');
         const savedSellerId = localStorage.getItem('cand_seller_id');
         const savedMode = localStorage.getItem('cand_login_mode') || 'seller';
-        if (savedToken && savedSellerId) {
+        
+        if (savedToken) {
           setToken(savedToken);
-          setSellerId(savedSellerId);
+          setSellerId(savedSellerId || '');
           setLoginMode(savedMode);
           setIsAuthenticated(true);
-          fetchProductsWithArgs(savedToken, savedSellerId);
+          
+          if (savedSellerId) {
+            fetchProductsWithArgs(savedToken, savedSellerId);
+          }
           fetchScheduledTasks(savedToken);
         }
       }
@@ -211,6 +225,8 @@ export default function App() {
       const cleanId = sellerId.trim();
       if (!cleanId) return showToast('조회할 판매자 ID를 먼저 입력해주세요.', 'error');
       localStorage.setItem('cand_admin_target_id', cleanId);
+    } else {
+      localStorage.setItem('cand_admin_target_id', '');
     }
 
     sessionStorage.setItem('cand_login_mode', loginMode);
@@ -378,7 +394,7 @@ export default function App() {
   const CustomUI = () => (
     toast.visible && (
       <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[100]">
-        <div className={`px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type === 'error' ? 'bg-red-600' : 'bg-gray-800'}`}>
+        <div className={`px-4 py-3 rounded-lg shadow-lg text-sm font-bold text-white ${toast.type === 'error' ? 'bg-red-600' : toast.type === 'warning' ? 'bg-yellow-600' : 'bg-gray-800'}`}>
           {toast.message}
         </div>
       </div>
@@ -414,7 +430,7 @@ export default function App() {
             {loginMode === 'seller' ? (
               <div className="bg-blue-50 border border-blue-100 p-6 rounded-xl text-center">
                 <p className="text-blue-800 font-bold mb-2">👋 본인의 계정으로 접속합니다.</p>
-                <p className="text-blue-600 text-xs leading-relaxed">로그인 완료 시, 프로필에서 판매자 ID(CS:...)를<br/>자동으로 추출하여 상품 목록을 불러옵니다.</p>
+                <p className="text-blue-600 text-xs leading-relaxed">로그인 후 내 프로필에서 셀러 ID 자동 탐지를 시도합니다. (실패 시 수동 입력 지원)</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -465,7 +481,7 @@ export default function App() {
             <h2 className="text-lg font-bold">{activeTab === 'productList' ? '상품 현황' : activeTab === 'schedule' ? '예약 설정' : '접속 정보'}</h2>
           </div>
           <div className="flex items-center gap-2">
-             <span className="bg-gray-100 text-gray-600 border text-xs font-bold px-3 py-1.5 rounded-md">ID: {sellerId || '로딩중...'}</span>
+             <span className="bg-gray-100 text-gray-600 border text-xs font-bold px-3 py-1.5 rounded-md">ID: {sellerId || '미설정'}</span>
              <span className={`text-xs font-bold px-3 py-1.5 rounded-md border ${loginMode === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>{loginMode.toUpperCase()}</span>
           </div>
         </header>
@@ -476,7 +492,7 @@ export default function App() {
               <div className="bg-white p-6 rounded-xl shadow-sm border">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="font-bold text-lg">내 판매 상품 목록</h3>
-                  <button onClick={fetchProducts} disabled={isLoading} className="px-4 py-2 bg-gray-100 text-sm font-bold rounded-lg hover:bg-gray-200">새로고침</button>
+                  {sellerId && <button onClick={fetchProducts} disabled={isLoading} className="px-4 py-2 bg-gray-100 text-sm font-bold rounded-lg hover:bg-gray-200">새로고침</button>}
                 </div>
                 <div className="border rounded-lg overflow-hidden">
                   <table className="w-full text-left bg-white text-sm">
@@ -484,7 +500,16 @@ export default function App() {
                       <tr><th className="p-4">상품명</th><th className="p-4">가격</th><th className="p-4 text-center">상태</th><th className="p-4 text-center">진열</th></tr>
                     </thead>
                     <tbody className="divide-y">
-                      {products.length === 0 ? (
+                      {!sellerId ? (
+                        <tr><td colSpan="4" className="p-12 text-center text-gray-500 bg-gray-50">
+                          <p className="mb-2 font-bold text-gray-700 text-base">⚠️ 셀러 ID 자동 탐지에 실패했습니다.</p>
+                          <p className="text-sm mb-6 text-gray-500">백엔드 API 권한 문제로 아이디를 가져오지 못했습니다. 아래에 직접 입력해주세요.</p>
+                          <div className="flex justify-center max-w-sm mx-auto shadow-sm rounded-lg overflow-hidden">
+                            <input type="text" id="manualInputFallback" placeholder="ex) CS:P8XLJRM3" className="w-full px-4 py-2.5 border border-gray-300 outline-none" />
+                            <button onClick={() => handleManualSaveSellerId(document.getElementById('manualInputFallback').value)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-2.5 transition shrink-0">저장 및 조회</button>
+                          </div>
+                        </td></tr>
+                      ) : products.length === 0 ? (
                         <tr><td colSpan="4" className="p-12 text-center text-gray-400">등록된 상품이 없거나 불러오는 중입니다.</td></tr>
                       ) : (
                         products.map(p => (
@@ -566,9 +591,20 @@ export default function App() {
               <h3 className="text-lg font-bold border-b pb-4">시스템 정보 및 세션 현황</h3>
               <div className="space-y-4 text-sm">
                 <div><label className="text-gray-400 font-bold block mb-1">Login Mode</label><div className="font-bold text-blue-600">{loginMode.toUpperCase()}</div></div>
-                <div><label className="text-gray-400 font-bold block mb-1">Active Seller ID</label><div className="p-2 bg-gray-50 rounded border font-mono">{sellerId}</div></div>
-                <div><label className="text-gray-400 font-bold block mb-1">Community ID</label><div className="font-mono">{communityId}</div></div>
-                <div><label className="text-gray-400 font-bold block mb-1">Scopes</label><div className="text-xs break-all opacity-70">{SCOPES}</div></div>
+                
+                <div className="pt-4 border-t border-gray-100">
+                  <label className="text-gray-500 font-bold block mb-2">현재 활성화된 판매자 ID</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" value={sellerId} onChange={e => setSellerId(e.target.value)} 
+                      className="flex-1 bg-gray-50 border border-gray-200 p-2.5 rounded font-mono text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" 
+                    />
+                    <button onClick={() => handleManualSaveSellerId(sellerId)} className="px-5 py-2.5 bg-gray-800 text-white font-bold rounded hover:bg-gray-900 transition">저장</button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-gray-100"><label className="text-gray-400 font-bold block mb-1">Community ID</label><div className="font-mono bg-gray-50 p-2 rounded border">{communityId}</div></div>
+                <div className="pt-4 border-t border-gray-100"><label className="text-gray-400 font-bold block mb-1">Scopes</label><div className="text-xs break-all opacity-70">{SCOPES}</div></div>
               </div>
             </div>
           )}
