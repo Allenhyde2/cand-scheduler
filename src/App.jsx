@@ -480,13 +480,13 @@ export default function App() {
                           </div>
                           <div className="flex justify-end gap-2">
                             <button type="button" onClick={() => setIsDatePickerOpen(false)} className="text-sm font-bold px-4 py-2 bg-gray-100 rounded">취소</button>
-                            <button type="button" onClick={handleConfirmDatePicker} className="text-sm font-bold px-4 py-2 bg-blue-600 text-white rounded">설정 확정</button>
+                            <button type="button" onClick={handleConfirmDatePicker} className="text-sm font-bold px-4 py-2 bg-blue-600 text-white rounded" style={{ backgroundColor: '#2563eb' }}>설정 확정</button>
                           </div>
                         </div>
                       </>
                     )}
                   </div>
-                  <button type="submit" className="w-full py-3.5 mt-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-md">예약 데이터 AWS 전송하기</button>
+                  <button type="submit" className="w-full py-3.5 mt-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition shadow-md" style={{ backgroundColor: '#2563eb' }}>예약 데이터 AWS 전송하기</button>
                 </form>
               </div>
 
@@ -545,7 +545,7 @@ export default function App() {
             </div>
             <div className="flex justify-end gap-3">
               <button onClick={() => setIsConfirmModalOpen(false)} className="px-5 py-2 bg-gray-100 rounded-lg font-bold">취소</button>
-              <button onClick={handleConfirmRegister} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold">예약하기</button>
+              <button onClick={handleConfirmRegister} className="px-5 py-2 bg-blue-600 text-white rounded-lg font-bold" style={{ backgroundColor: '#2563eb' }}>예약하기</button>
             </div>
           </div>
         </div>
