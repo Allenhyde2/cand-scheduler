@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-const DEFAULT_GROUP_ID = 'G00O7NKV9M';
+const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
