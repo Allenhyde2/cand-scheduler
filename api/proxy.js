@@ -1,7 +1,7 @@
 // Vercel Serverless Function: CORS 에러를 우회하기 위한 프록시 서버입니다.
 
 export default async function handler(req, res) {
-  // 클라이언트에서 넘겨준 endpoint 파라미터 (예: 'products')
+  // 클라이언트에서 넘겨준 endpoint 파라미터 (예: 'products', 'users/bulk' 등)
   const { endpoint, ...queryParams } = req.query;
 
   if (!endpoint) {
@@ -25,13 +25,22 @@ export default async function handler(req, res) {
     if (req.headers.authorization) headers['Authorization'] = req.headers.authorization;
     if (req.headers['x-can-community-id']) headers['x-can-community-id'] = req.headers['x-can-community-id'];
 
-    console.log(`프록시 요청 전송: ${targetUrl.toString()}`);
+    console.log(`프록시 요청 전송 [${req.method}]: ${targetUrl.toString()}`);
 
-    // 서버 대 서버로 실제 API를 호출합니다 (CORS 무시)
-    const response = await fetch(targetUrl.toString(), {
+    // fetch 호출을 위한 옵션 객체 조립
+    const fetchOptions = {
       method: req.method,
       headers: headers,
-    });
+    };
+
+    // ⭐️ 핵심 수정: POST 요청 등에서 프론트가 보낸 req.body (예: { ids: [...] })가 있다면, 
+    // 이를 문자열(JSON)로 변환하여 캔패스 본섭으로 고스란히 토스합니다.
+    if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
+      fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+    }
+
+    // 서버 대 서버로 실제 API를 호출합니다 (CORS 무시)
+    const response = await fetch(targetUrl.toString(), fetchOptions);
 
     const data = await response.json();
 
