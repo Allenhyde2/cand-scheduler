@@ -9,20 +9,6 @@ const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
-// ⭐️ JWT(토큰)에서 유저 정보를 해독하는 함수
-const parseJwt = (token) => {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
-  } catch (e) {
-    return null;
-  }
-};
-
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
@@ -98,7 +84,6 @@ export default function App() {
         }
 
         try {
-          // ⭐️ 수정됨: 브라우저 직접 통신이 아닌, Vercel 프록시 API(/api/token)로 우회하도록 복구했습니다.
           const redirectUri = `${window.location.origin}/canpass/callback`;
           const tokenApiUrl = `${window.location.origin}/api/token`;
 
@@ -120,17 +105,11 @@ export default function App() {
           
           let finalSellerId = '';
 
-          // ⭐️ 모드에 따른 판매자 ID 결정 로직
+          // ⭐️ 모드에 따른 초기 Seller ID 세팅
           if (savedLoginMode === 'admin') {
-            finalSellerId = savedSellerId || '';
+            finalSellerId = savedSellerId || ''; // 어드민은 입력했던 값 그대로 유지
           } else {
-            // 판매자 모드: 발급받은 JWT 토큰을 해독해서 유저 ID를 강제로 가져옴
-            const decodedPayload = parseJwt(accessToken);
-            if (decodedPayload) {
-              // 캔패스 토큰 스펙에 따라 userId 또는 canAccount를 사용
-              finalSellerId = decodedPayload.userId || decodedPayload.canAccount || 'my_account';
-              console.log("추출된 판매자 ID:", finalSellerId);
-            }
+            finalSellerId = ''; // 판매자는 캔패스 유저ID(Base64)를 쓰지 않고 일단 비워둡니다. (역추출 예정)
           }
 
           setLoginMode(savedLoginMode);
@@ -142,8 +121,10 @@ export default function App() {
           localStorage.setItem('cand_seller_id', finalSellerId);
           localStorage.setItem('cand_login_mode', savedLoginMode);
 
-          fetchProductsWithArgs(accessToken, DEFAULT_GROUP_ID, finalSellerId);
+          // 상품 목록 불러오기 (여기서 역추출이 일어납니다)
+          fetchProductsWithArgs(accessToken, DEFAULT_GROUP_ID, finalSellerId, savedLoginMode);
           fetchScheduledTasks(accessToken, DEFAULT_GROUP_ID);
+          
           showToast(`${savedLoginMode === 'admin' ? '어드민' : '판매자'} 로그인이 완료되었습니다.`, 'success');
 
         } catch (err) {
@@ -162,12 +143,12 @@ export default function App() {
         const savedSellerId = localStorage.getItem('cand_seller_id');
         const savedMode = localStorage.getItem('cand_login_mode') || 'seller';
         
-        if (savedToken && savedSellerId) {
+        if (savedToken) {
           setToken(savedToken);
-          setSellerId(savedSellerId);
+          setSellerId(savedSellerId || '');
           setLoginMode(savedMode);
           setIsAuthenticated(true);
-          fetchProductsWithArgs(savedToken, DEFAULT_GROUP_ID, savedSellerId);
+          fetchProductsWithArgs(savedToken, DEFAULT_GROUP_ID, savedSellerId || '', savedMode);
           fetchScheduledTasks(savedToken, DEFAULT_GROUP_ID);
         }
       }
@@ -184,6 +165,10 @@ export default function App() {
       const cleanSellerId = sellerId.trim();
       if (!cleanSellerId) return showToast('조회할 판매자 ID를 먼저 입력해주세요.', 'error');
       localStorage.setItem('cand_seller_id', cleanSellerId);
+    } else {
+      // 판매자 모드일 때는 기존 Seller ID 초기화 (로그인 후 역추출하기 위함)
+      setSellerId('');
+      localStorage.setItem('cand_seller_id', '');
     }
 
     sessionStorage.setItem('cand_login_mode', loginMode);
@@ -250,12 +235,12 @@ export default function App() {
     }
   };
 
-  const fetchProductsWithArgs = async (currentToken, currentCommunityId, currentSellerId) => {
+  const fetchProductsWithArgs = async (currentToken, currentCommunityId, currentSellerId, currentMode) => {
     setIsLoading(true);
     try {
       const activeToken = currentToken || token;
       const activeCommunityId = currentCommunityId || communityId;
-      const activeSellerId = currentSellerId || sellerId;
+      const activeMode = currentMode || loginMode;
 
       if (!activeToken) throw new Error("유효한 토큰이 없습니다.");
 
@@ -271,13 +256,25 @@ export default function App() {
       const data = JSON.parse(responseText);
       let fetchedList = data.data || [];
 
-      // 필터링 적용 (판매자 ID가 있으면 해당 판매자 것만, 없으면 전체)
-      if (activeSellerId) {
-        fetchedList = fetchedList.filter(p => {
-          const idField = p.userId || p.sellerId || p.creatorId; 
-          // ⭐️ 베이크 API 스펙에 따라 로그인한 본인 계정의 상품만 내려온다면 이 필터는 자연스럽게 통과됩니다.
-          return idField ? idField === activeSellerId : true;
-        });
+      // ⭐️ 핵심: 판매자 모드 (필터 건너뛰고 셀러 ID 역추출) vs 어드민 모드 (강제 필터링)
+      if (activeMode === 'seller') {
+        // 판매자는 백엔드에서 본인 상품만 주므로 필터링 패스!
+        // 대신 첫 번째 상품에서 'CS:...' 형식의 셀러 ID를 뽑아서 화면과 스토리지에 저장해줍니다.
+        if (fetchedList.length > 0) {
+          const autoDetectedId = fetchedList[0].sellerId || fetchedList[0].userId || fetchedList[0].creatorId;
+          if (autoDetectedId) {
+            setSellerId(autoDetectedId);
+            localStorage.setItem('cand_seller_id', autoDetectedId);
+          }
+        }
+      } else {
+        // 어드민 모드는 전체 상품이 내려오므로 사용자가 입력한 아이디로 필터링
+        if (currentSellerId) {
+          fetchedList = fetchedList.filter(p => {
+            const idField = p.userId || p.sellerId || p.creatorId; 
+            return idField ? idField === currentSellerId : true;
+          });
+        }
       }
 
       setProducts(fetchedList);
@@ -289,7 +286,7 @@ export default function App() {
     }
   };
 
-  const fetchProducts = () => fetchProductsWithArgs(token, communityId, sellerId);
+  const fetchProducts = () => fetchProductsWithArgs(token, communityId, sellerId, loginMode);
 
   const handleSelectProduct = (product) => {
     setScheduleForm({ ...scheduleForm, productId: product.id });
@@ -448,7 +445,7 @@ export default function App() {
             {loginMode === 'seller' ? (
               <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl text-sm text-blue-800 text-center">
                 <p className="font-bold mb-1">본인의 판매자 계정으로 로그인합니다.</p>
-                <p className="text-xs opacity-80">로그인 완료 시, 소유하고 계신 상품 목록만 자동으로 필터링되어 출력됩니다.</p>
+                <p className="text-xs opacity-80">로그인 완료 시, 소유하고 계신 상품 목록만 자동으로 가져옵니다.</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -538,7 +535,7 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2">
              <span className="bg-gray-100 text-gray-600 border border-gray-200 text-xs font-bold px-3 py-1.5 rounded-md">
-                ID: {sellerId}
+                ID: {sellerId || '자동 추출 중...'}
              </span>
              <span className={`text-xs font-bold px-3 py-1.5 rounded-md border ${loginMode === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                 {loginMode === 'admin' ? 'ADMIN' : 'SELLER'}
@@ -737,7 +734,7 @@ export default function App() {
                  </div>
                  <div className="pt-4 border-t border-gray-100">
                    <label className="block text-gray-500 font-bold mb-1">현재 활성화된 판매자 ID</label>
-                   <input type="text" readOnly value={sellerId} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded font-mono text-gray-600" />
+                   <input type="text" readOnly value={sellerId || '자동 추출 중...'} className="w-full bg-gray-50 border border-gray-200 p-2.5 rounded font-mono text-gray-600" />
                  </div>
                </div>
              </div>
