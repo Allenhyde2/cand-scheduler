@@ -300,6 +300,7 @@ export default function App() {
               <button 
                 onClick={handleOAuthLogin} disabled={isLoginProcessing}
                 className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-sm"
+                style={{ backgroundColor: '#2563eb' }}
               >
                 {isLoginProcessing ? '인증 처리 중...' : 'CANpass로 권한 승인 및 로그인'}
               </button>
