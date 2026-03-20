@@ -844,7 +844,7 @@ export default function App() {
               <div className={`absolute inset-y-0 w-1/2 rounded-2xl shadow-md transition-all duration-500 ease-out overflow-hidden flex items-center justify-center ${loginMode === 'seller' ? 'translate-x-0 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600 border border-blue-400/50 shadow-blue-500/30' : 'translate-x-full bg-gradient-to-r from-purple-500 via-fuchsia-500 to-purple-600 border border-purple-400/50 shadow-purple-500/30'}`}>
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
               </div>
-              <button type="button" onClick={() => setLoginMode('seller')} className={`relative z-10 flex-1 py-3 text-xs sm:text-sm font-extrabold rounded-2xl transition-all duration-300 active:scale-95 ${loginMode === 'seller' ? 'text-white drop-shadow-md' : 'text-slate-500/80 hover:text-slate-800'} ${colorVariants.blue}`}>판매자 로그인</button>
+              <button type="button" onClick={() => setLoginMode('seller')} className={`relative z-10 flex-1 py-3 text-xs sm:text-sm font-extrabold rounded-2xl transition-all duration-300 active:scale-95 ${loginMode === 'seller' ? 'text-white drop-shadow-md' : 'text-slate-500/80 hover:text-slate-800'}`}>판매자 로그인</button>
               <button type="button" onClick={() => setLoginMode('admin')} className={`relative z-10 flex-1 py-3 text-xs sm:text-sm font-extrabold rounded-2xl transition-all duration-300 active:scale-95 ${loginMode === 'admin' ? 'text-white drop-shadow-md' : 'text-slate-500/80 hover:text-slate-800'}`}>어드민 로그인</button>
             </div>
             
