@@ -826,6 +826,7 @@ export default function App() {
   // ==========================================
   if (!isAuthenticated) {
     return (
+      <>
       <GlobalStyles />
         {/* ⭐️ 배경 100vw 전체 화면 꽉 채우기 */}
         <div className="min-h-screen w-screen bg-gradient-to-br from-indigo-100 via-slate-50 to-purple-100 flex items-center justify-center p-4 sm:p-6 font-sans text-slate-800 relative overflow-hidden">
@@ -898,6 +899,7 @@ export default function App() {
         </div>
       </div>
     );
+    </>
   }
 
   // ==========================================
