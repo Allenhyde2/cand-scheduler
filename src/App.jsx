@@ -735,7 +735,7 @@ export default function App() {
         
         <CustomUI />
 
-        <div className="max-w-md w-full relative z-10">
+        <div className="w-full max-w-md relative z-10 transition-all duration-300">
           <div className="bg-white/40 backdrop-blur-2xl border border-white/60 rounded-[2.5rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.1)] overflow-hidden">
             <div className="pt-12 pb-4 text-center flex flex-col items-center">
               <img src="https://ca.group-edge.net/i/G0IZUDWCL-logo-r1xy6d/logo" alt="VAKE Logo" className="h-16 mb-3 object-contain drop-shadow-md" />
