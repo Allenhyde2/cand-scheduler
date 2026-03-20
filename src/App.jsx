@@ -1400,12 +1400,15 @@ export default function App() {
       {/* 부드러운 페이드 인 효과 및 ⭐️ #root 기본 CSS 초기화 (배경 갇힘 해결 핵심) */}
       <style dangerouslySetInnerHTML={{__html: `
         /* Vite 기본 index.css 에 걸린 너비 제한 강제 해제 */
-        #root {
+        /* html, body, #root 모두의 크기 제한을 풀고 전체 화면으로 확장 */
+        html, body, #root {
           max-width: none !important;
-          width: 100vw !important;
+          width: 100% !important;
           margin: 0 !important;
           padding: 0 !important;
+          display: block !important; /* Vite 기본 flex 중앙 정렬 강제 무력화 (핵심) */
           text-align: left !important;
+          overflow-x: hidden !important;
         }
         
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
