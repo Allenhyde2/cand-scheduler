@@ -327,15 +327,6 @@ export default function App() {
     }
   };
 
-  const handleManualSaveSellerId = (inputId) => {
-    const cleanId = (inputId || '').trim();
-    if (!cleanId) return showToast('판매자 아이디를 정확히 입력해주세요.', 'error');
-    setSellerId(cleanId);
-    localStorage.setItem('cand_seller_id', cleanId);
-    showToast(`셀러 ID(${cleanId})가 세팅되었습니다. 목록을 불러옵니다.`, 'success');
-    fetchProductsWithArgs(token, cleanId, loginMode, false);
-  };
-
   useEffect(() => {
     const handleOAuthCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
@@ -377,7 +368,7 @@ export default function App() {
           } else {
             const autoId = await autoFetchSellerId(accessToken);
             if (autoId) { finalSellerId = autoId; } 
-            else { showToast('셀러 ID 자동 탐지에 실패했습니다. 직접 입력해주세요.', 'warning'); }
+            else { showToast('셀러 ID 자동 탐지에 실패했습니다. 시스템 관리자에게 문의하세요.', 'warning'); }
           }
           setToken(accessToken);
           setSellerId(finalSellerId);
@@ -696,7 +687,7 @@ export default function App() {
   );
 
   // ==========================================
-  // 로그인 화면 (Demo Mode 기능 추가)
+  // 로그인 화면 
   // ==========================================
   if (!isAuthenticated) {
     return (
@@ -748,8 +739,6 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                
-                {/* ⭐️ 삭제되었던 마이크로 인터랙션 완벽 복원 (빛 효과, 화살표 바운스, 그라데이션 시프트) */}
                 <div className="space-y-3">
                   <button type="submit" disabled={isLoginProcessing} className="relative w-full py-3.5 sm:py-4 mt-1 sm:mt-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-[length:200%_auto] hover:bg-right text-white font-extrabold rounded-2xl shadow-[0_8px_20px_-6px_rgba(99,102,241,0.6)] hover:shadow-[0_12px_25px_-6px_rgba(99,102,241,0.8)] transition-all duration-500 active:scale-[0.98] flex items-center justify-center gap-2 overflow-hidden group disabled:opacity-50 disabled:pointer-events-none">
                     <div className="absolute inset-0 -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
@@ -774,6 +763,9 @@ export default function App() {
     );
   }
 
+  // ==========================================
+  // 메인 대시보드 화면
+  // ==========================================
   return (
     <>
       <GlobalStyles />
@@ -870,27 +862,48 @@ export default function App() {
                       <tr><th className="px-6 py-4">상품 정보</th><th className="px-6 py-4 text-right">가격</th><th className="px-6 py-4 text-center">상태</th><th className="px-6 py-4 text-center">관리</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/40">
-                      {products.map(p => (
-                        <tr key={p.id} className="hover:bg-white/40 transition-colors group">
-                          <td className="px-6 py-4">
-                            <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name || '이름 없음'}</p>
-                            <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
-                          </td>
-                          <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
-                          <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white shadow-sm border border-white/60">{translateStatus(p.status)}</span></td>
-                          <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white transition-all">수정</button></td>
-                        </tr>
-                      ))}
+                      {(loginMode === 'seller' && !sellerId) ? (
+                        <tr><td colSpan="6" className="p-10 md:p-20 text-center text-slate-500">
+                          <div className="bg-white/60 p-6 rounded-2xl border border-white/60 shadow-sm max-w-sm mx-auto">
+                            <p className="mb-2 font-extrabold text-red-500 text-sm">⚠️ 셀러 ID 추출 실패</p>
+                            <p className="text-[11px] text-slate-500 font-bold leading-relaxed">보안 정책 및 접근 권한 제한으로 인해 판매자 아이디를 찾지 못했습니다.<br/>다시 로그인하거나 관리자에게 문의해주세요.</p>
+                          </div>
+                        </td></tr>
+                      ) : isLoading && products.length === 0 ? (
+                        <tr><td colSpan="6" className="p-20 text-center">
+                          <div className="flex flex-col items-center justify-center space-y-4">
+                            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin shadow-md"></div>
+                            <p className="font-extrabold text-blue-600 text-sm animate-pulse tracking-widest uppercase">Loading...</p>
+                          </div>
+                        </td></tr>
+                      ) : products.length === 0 ? (
+                        <tr><td colSpan="6" className="p-16 text-center text-slate-400 font-extrabold text-sm">조회된 상품이 없습니다.</td></tr>
+                      ) : (
+                        products.map(p => {
+                          const imgUrl = p.images?.mobile?.[0] || p.images?.web?.[0] || '';
+                          return (
+                            <tr key={p.id} className="hover:bg-white/40 transition-colors group">
+                              <td className="px-6 py-4">
+                                <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name || '이름 없음'}</p>
+                                <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
+                              </td>
+                              <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
+                              <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white shadow-sm border border-white/60">{translateStatus(p.status)}</span></td>
+                              <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white transition-all">수정</button></td>
+                            </tr>
+                          )
+                        })
+                      )}
                     </tbody>
                   </table>
                   {pagingAfter && <button onClick={loadMoreProducts} className="w-full py-6 text-slate-400 text-xs font-bold hover:text-blue-600 transition-colors">결과 더 보기</button>}
-                  {products.length === 0 && !isLoading && <div className="p-20 text-center text-slate-400 font-bold">표시할 상품이 없습니다.</div>}
                 </div>
               </div>
             )}
 
             {activeTab === 'schedule' && (
               <div className="flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pb-4 pr-1 relative">
+                {/* ⭐️ 예약 생성기 전체 패널 컨테이너 (여기가 top-0의 기준이 됩니다) */}
                 <div className={`shrink-0 ${glassPanel} p-5 md:p-6 flex flex-col relative z-20`}>
                   <h3 className="font-extrabold text-base md:text-lg text-slate-800 mb-6">예약 생성기</h3>
                   <form onSubmit={handlePreSubmit} className="space-y-4">
@@ -940,11 +953,15 @@ export default function App() {
                     <button type="submit" className={glassButtonPrimary}>예약 정보 클라우드 전송</button>
                   </form>
 
-                  {/* ⭐️ 예약 생성기 캘린더 모듈 (XYZ 포지션 설정부) */}
+                  {/* ⭐️ 예약 생성기 캘린더 모듈 위치 지정 코드 */}
                   {isDatePickerOpen && (
                     <>
                       <div className="fixed inset-0 z-[900]" onClick={() => setIsDatePickerOpen(false)}></div>
-                      <div className="absolute top-16 right-20 z-[1000]">
+                      {/* Z 포지션: z-[1000] (가장 위로 띄움)
+                        Y 포지션: top-16 (예약 생성기 박스 상단(어퍼보더) 기준 4rem 아래)
+                        X 포지션: right-8 md:right-20 (우측 테두리 기준 모바일 2rem, PC 5rem 떨어짐)
+                      */}
+                      <div className="absolute top-16 right-8 md:right-20 z-[1000]">
                         <GlassDateTimePicker 
                           date={pickerDate} 
                           time={pickerTime} 
@@ -989,11 +1006,9 @@ export default function App() {
                   <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Login Mode</label><p className="font-bold text-blue-600 bg-white/50 px-4 py-2 rounded-xl border border-white/60 inline-block">{loginMode.toUpperCase()}</p></div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Active Seller ID (추출 정보)</label>
-                    <div className="flex gap-2">
-                      <input type="text" value={sellerId} onChange={e => setSellerId(e.target.value)} className={`${glassInput} font-mono`} placeholder="CS:P8XL..." />
-                      <button onClick={() => handleManualSaveSellerId(sellerId)} className={`${glassButtonPrimary} !w-auto px-6`}>저장</button>
+                    <div className="font-extrabold text-slate-700 text-sm bg-white/50 px-4 py-3 rounded-2xl border border-white/60 shadow-sm font-mono">
+                      {sellerId || '미설정'}
                     </div>
-                    <p className="text-[10px] text-slate-400 font-bold mt-2 ml-1">* 토큰에서 추출된 셀러 정보입니다. 잘못된 경우 수동 수정 가능합니다.</p>
                   </div>
                 </div>
               </div>
