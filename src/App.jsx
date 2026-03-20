@@ -9,30 +9,26 @@ const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
-// ⭐️ Vite 기본 CSS(너비 제한) 강제 무력화 및 공통 스타일 (분리형)
+// 파일 상단, createCodeChallenge 함수 아래쯤에 추가하세요.
 const GlobalStyles = () => (
   <style dangerouslySetInnerHTML={{__html: `
-    /* html, body, #root 모두의 크기 제한을 풀고 전체 화면으로 확장 */
-    html, body, #root {
+    /* 1. html과 body의 모든 여백을 없애고 뷰포트 너비를 100%로 고정 */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100vw !important;
+      overflow-x: hidden !important; /* 가로 스크롤 방지 */
+    }
+
+    /* 2. Vite가 걸어둔 #root의 최대 너비 제한(1280px)을 완전히 해제 */
+    #root {
       max-width: none !important;
       width: 100vw !important;
       margin: 0 !important;
       padding: 0 !important;
-      display: block !important; /* Vite 기본 flex 중앙 정렬 강제 무력화 (핵심) */
+      display: block !important; /* Vite 기본 Flex 레이아웃 해제 */
       text-align: left !important;
-      overflow-x: hidden !important;
     }
-    
-    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 10px; }
-    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
-    
-    @keyframes fadeInFast {
-      0% { opacity: 0; transform: translateY(5px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in-fast { animation: fadeInFast 0.2s ease-out forwards; }
   `}} />
 );
 
@@ -826,6 +822,29 @@ export default function App() {
   // ==========================================
   if (!isAuthenticated) {
     return (
+      <>
+      // 파일 상단, createCodeChallenge 함수 아래쯤에 추가하세요.
+const GlobalStyles = () => (
+  <style dangerouslySetInnerHTML={{__html: `
+    /* 1. html과 body의 모든 여백을 없애고 뷰포트 너비를 100%로 고정 */
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100vw !important;
+      overflow-x: hidden !important; /* 가로 스크롤 방지 */
+    }
+
+    /* 2. Vite가 걸어둔 #root의 최대 너비 제한(1280px)을 완전히 해제 */
+    #root {
+      max-width: none !important;
+      width: 100vw !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: block !important; /* Vite 기본 Flex 레이아웃 해제 */
+      text-align: left !important;
+    }
+  `}} />
+);
       <div className="min-h-screen w-full bg-gradient-to-br from-indigo-100 via-slate-50 to-purple-100 flex items-center justify-center p-4 sm:p-6 font-sans text-slate-800 relative overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse pointer-events-none"></div>
@@ -896,6 +915,7 @@ export default function App() {
         </div>
       </div>
     );
+          </>
   }
 
   // ==========================================
