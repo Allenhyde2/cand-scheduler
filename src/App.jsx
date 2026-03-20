@@ -420,22 +420,25 @@ export default function App() {
         throw new Error(`서버 응답 오류: ${res.status}`);
       }
 
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("application/json")) {
-        const data = await res.json();
-        const fetchedList = data.tasks || data.data || (Array.isArray(data) ? data : []);
-
-        const formattedTasks = fetchedList.map(task => ({
-          ...task,
-          logs: task.logs || [`☁️ 서버에서 저장된 예약 정보를 불러왔습니다. (${new Date().toLocaleTimeString()})`]
-        }));
-
-        setTasks(formattedTasks);
-      } else {
-        const text = await res.text();
-        console.error("스케줄러 응답 에러 (JSON 아님):", text);
+      // ⭐️ 불안정한 content-type 헤더 검사 로직을 제거하고, 데이터를 바로 텍스트로 읽은 뒤 JSON 파싱 시도
+      const responseText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error("스케줄러 응답 에러 (JSON 파싱 실패):", responseText);
         throw new Error("서버가 JSON이 아닌 데이터를 반환했습니다.");
       }
+
+      const fetchedList = data.tasks || data.data || (Array.isArray(data) ? data : []);
+
+      const formattedTasks = fetchedList.map(task => ({
+        ...task,
+        logs: task.logs || [`☁️ 서버에서 저장된 예약 정보를 불러왔습니다. (${new Date().toLocaleTimeString()})`]
+      }));
+
+      setTasks(formattedTasks);
+      
     } catch (err) {
       console.error('예약 목록 조회 실패 상세 에러:', err);
       if (err.message.includes('Failed to fetch')) {
