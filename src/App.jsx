@@ -9,40 +9,30 @@ const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
-// 파일 상단에 추가
+// --- ⭐️ 컬러 및 상태 디자인 변수 (인터랙션/레이아웃 배제) ---
 const colorVariants = {
-  // 기본 액션 버튼용 (Primary)
   blue: 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30',
-  // 삭제 또는 경고용 (Danger)
   red: 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/30',
-  // 성공 또는 판매중 상태용 (Success)
   green: 'bg-green-600 hover:bg-green-700 text-white shadow-green-500/30',
-  // 어드민 또는 포인트 컬러용 (Purple)
   purple: 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/30',
-  // 수정 버튼 등에 쓰이는 연한 파랑
-  edit: 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200',
-  // 삭제 버튼 등에 쓰이는 연한 빨강
-  delete: 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'
+  edit: 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200',
+  delete: 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
 };
 
-// 파일 상단, createCodeChallenge 함수 아래쯤에 추가하세요.
 const GlobalStyles = () => (
   <style dangerouslySetInnerHTML={{__html: `
-    /* 1. html과 body의 모든 여백을 없애고 뷰포트 너비를 100%로 고정 */
     html, body {
       margin: 0 !important;
       padding: 0 !important;
       width: 100vw !important;
-      overflow-x: hidden !important; /* 가로 스크롤 방지 */
+      overflow-x: hidden !important;
     }
-
-    /* 2. Vite가 걸어둔 #root의 최대 너비 제한(1280px)을 완전히 해제 */
     #root {
       max-width: none !important;
       width: 100vw !important;
       margin: 0 !important;
       padding: 0 !important;
-      display: block !important; /* Vite 기본 Flex 레이아웃 해제 */
+      display: block !important;
       text-align: left !important;
     }
   `}} />
@@ -180,7 +170,8 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
 
       <div className="flex gap-2 justify-end">
         <button type="button" onClick={onCancel} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">취소</button>
-        <button type="button" onClick={handleConfirm} className="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-xl shadow-[0_4px_12px_rgba(37,99,235,0.3)] hover:bg-blue-700 transition-all">적용하기</button>
+        {/* 마이크로인터랙션(패딩, 크기 등)은 남기고 색상만 colorVariants 사용 */}
+        <button type="button" onClick={handleConfirm} className={`px-6 py-2.5 text-sm font-bold rounded-xl transition-all ${colorVariants.blue}`}>적용하기</button>
       </div>
     </div>
   );
@@ -205,13 +196,11 @@ export default function App() {
   
   const [tasks, setTasks] = useState([]);
 
-  // --- ⭐️ 복원됨: 상품 목록 필터 및 페이지네이션 상태 ---
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filters, setFilters] = useState({ name: '', sku: '', tag: '', status: [], display: 'all' });
   const [pagingAfter, setPagingAfter] = useState(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  // --- ⭐️ 복원됨: 상품 정보 수정 모달 상태 ---
   const [productEditModal, setProductEditModal] = useState({
     isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: ''
   });
@@ -289,7 +278,6 @@ export default function App() {
     'x-can-community-id': communityId,
   });
 
-  // --- ⭐️ 복원됨: 판매자 ID 자동 탐지 로직 ---
   const autoFetchSellerId = async (accessToken) => {
     try {
       const fetchOptions = {
@@ -373,7 +361,6 @@ export default function App() {
           const accessToken = data.access_token;
           let finalSellerId = '';
 
-          // ⭐️ 복원됨: 로그인 모드에 따른 셀러 ID 자동 분기 처리
           if (savedLoginMode === 'admin') {
             finalSellerId = savedAdminTargetId || '';
           } else {
@@ -500,7 +487,6 @@ export default function App() {
     }
   };
 
-  // --- ⭐️ 복원됨: 상품 목록 및 페이지네이션/필터 처리 통신 로직 ---
   const fetchProductsWithArgs = async (currentToken, currentSellerId, currentMode, isLoadMore = false) => {
     if (currentMode === 'seller' && !currentSellerId) return;
     
@@ -796,13 +782,9 @@ export default function App() {
   // --- 글래스몰피즘 공통 클래스 ---
   const glassPanel = "bg-white/60 backdrop-blur-xl border border-white/50 shadow-sm rounded-3xl";
   const glassInput = "w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 shadow-sm placeholder-slate-400";
-  // 특정 색상을 인자로 받아 클래스를 완성하는 함수 형태로 변경하면 더 강력해집니다.
-  const getButtonClass = (colorKey = 'blue') => {
-    const base = "w-full py-3.5 font-bold rounded-2xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50";
-    return `${base} ${colorVariants[colorKey] || colorVariants.blue}`;
-  };
-  // 기존에 쓰이던 변수명도 유지 (기본값 파란색)
-  const glassButtonPrimary = getButtonClass('blue');
+  
+  // ⭐️ [수정된 부분]: 마이크로 인터랙션을 강제하지 않고, 기존 디자인의 레이아웃 문자열과 colorVariants만 병합합니다.
+  const glassButtonPrimary = `w-full py-3.5 font-bold rounded-2xl shadow-lg transition-all ${colorVariants.blue}`;
   const glassButtonSecondary = "px-4 py-2 bg-white/60 hover:bg-white/90 border border-white/60 rounded-xl text-slate-700 font-bold shadow-sm transition-all text-sm";
 
   const statusOptions = [
@@ -831,7 +813,7 @@ export default function App() {
             </p>
             <div className="flex justify-end gap-2">
               <button onClick={closeConfirm} className={glassButtonSecondary}>취소</button>
-              <button onClick={confirmDialog.onConfirm} className="px-5 py-2 bg-blue-600 text-white rounded-xl font-bold shadow-md transition-all">확인</button>
+              <button onClick={confirmDialog.onConfirm} className={`px-5 py-2 rounded-xl font-bold shadow-md transition-all ${colorVariants.blue}`}>확인</button>
             </div>
           </div>
         </div>
@@ -901,6 +883,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* ⭐️ [수정된 부분]: 기존의 예쁜 애니메이션과 레이아웃 속성을 그대로 유지합니다. */}
               <button type="submit" disabled={isLoginProcessing} className="relative w-full py-3.5 sm:py-4 mt-1 sm:mt-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-[length:200%_auto] hover:bg-right text-white font-extrabold rounded-2xl shadow-[0_8px_20px_-6px_rgba(99,102,241,0.6)] hover:shadow-[0_12px_25px_-6px_rgba(99,102,241,0.8)] transition-all duration-500 active:scale-[0.98] flex items-center justify-center gap-2 overflow-hidden group disabled:opacity-50 disabled:pointer-events-none">
                 <div className="absolute inset-0 -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
                 {isLoginProcessing ? (
@@ -1027,7 +1010,7 @@ export default function App() {
                   </div>
                   <div className="mt-5 flex justify-end gap-2">
                     <button onClick={resetFilters} className="px-5 py-2.5 bg-white/60 border border-white/60 text-slate-600 font-bold rounded-xl hover:bg-white transition-all shadow-sm text-xs sm:text-sm">조건 초기화</button>
-                    <button onClick={applyFilters} className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all text-xs sm:text-sm">필터 적용하여 검색</button>
+                    <button onClick={applyFilters} className={`px-6 py-2.5 font-bold rounded-xl shadow-md transition-all text-xs sm:text-sm ${colorVariants.blue}`}>필터 적용하여 검색</button>
                   </div>
                 </div>
               )}
@@ -1091,6 +1074,7 @@ export default function App() {
                               </div>
                             </td>
                             <td className="px-4 md:px-6 py-2 md:py-3 text-center">
+                              {/* ⭐️ [수정된 부분]: 이 버튼은 원래 디자인대로 하드코딩 문자열을 사용하여 예쁜 글래스몰피즘 투명 버튼을 유지합니다. */}
                               <button onClick={() => openProductEditModal(p)} className="text-slate-400 hover:text-blue-600 bg-white/40 hover:bg-white px-3 py-1.5 md:px-4 md:py-2 rounded-xl border border-white/60 shadow-sm transition-all text-[10px] md:text-xs font-bold flex items-center justify-center mx-auto gap-1 md:gap-1.5"><svg className="w-3.5 h-3.5 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> 수정</button>
                             </td>
                           </tr>
@@ -1149,10 +1133,10 @@ export default function App() {
                             </div>
                           )}
                           <div className="px-1">
-                            {filteredProducts.length === 0 ? (
+                            {products.filter(p => p.name.includes(productSearchTerm) || p.id.includes(productSearchTerm)).length === 0 ? (
                               <div className="px-3 py-4 text-center text-sm text-slate-400 font-bold">검색 결과가 없습니다.</div>
                             ) : (
-                              filteredProducts.map(p => (
+                              products.filter(p => p.name.includes(productSearchTerm) || p.id.includes(productSearchTerm)).map(p => (
                                 <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-blue-50 transition-all mb-1 flex justify-between items-center">
                                   <span className="font-bold text-slate-700 truncate mr-2">{p.name}</span>
                                   <span className="text-[9px] text-slate-400 font-mono shrink-0">{p.id}</span>
@@ -1239,8 +1223,9 @@ export default function App() {
                             </div>
                           </div>
                           <div className="flex gap-2 items-center shrink-0">
-                            <button onClick={() => openEditModal(t)} className="px-3 py-1.5 md:px-3.5 md:py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-sm">수정</button>
-                            <button onClick={() => handleDeleteTask(t)} className="px-3 py-1.5 md:px-3.5 md:py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl text-xs font-bold transition-all shadow-sm">삭제</button>
+                            {/* ⭐️ [수정된 부분]: 기본 수정/삭제 버튼들에만 colorVariants를 안전하게 병합 */}
+                            <button onClick={() => openEditModal(t)} className={`px-3 py-1.5 md:px-3.5 md:py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.edit}`}>수정</button>
+                            <button onClick={() => handleDeleteTask(t)} className={`px-3 py-1.5 md:px-3.5 md:py-2 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.delete}`}>삭제</button>
                           </div>
                        </div>
                      ))}
@@ -1269,7 +1254,7 @@ export default function App() {
                       className={`${glassInput} font-mono`} 
                       placeholder="셀러 ID 수동 변경"
                     />
-                    <button onClick={() => handleManualSaveSellerId(sellerId)} className={`${glassButtonPrimary} !w-auto !py-3 px-6 whitespace-nowrap`}>저장</button>
+                    <button onClick={() => handleManualSaveSellerId(sellerId)} className={`!w-auto !py-3 px-6 whitespace-nowrap ${glassButtonPrimary}`}>저장</button>
                   </div>
                 </div>
               </div>
@@ -1350,7 +1335,8 @@ export default function App() {
             
             <div className="px-6 py-5 border-t border-white/40 flex justify-end gap-2 bg-white/30 shrink-0">
               <button onClick={closeProductEditModal} className={glassButtonSecondary}>취소</button>
-              <button onClick={handleUpdateProduct} className="px-6 py-2.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition font-bold">변경사항 즉시 저장</button>
+              {/* ⭐️ [수정된 부분]: colorVariants의 색상만 안전하게 병합 */}
+              <button onClick={handleUpdateProduct} className={`px-6 py-2.5 text-sm rounded-xl shadow-md transition-all font-bold ${colorVariants.blue}`}>변경사항 즉시 저장</button>
             </div>
           </div>
         </div>
@@ -1374,7 +1360,8 @@ export default function App() {
             </div>
             <div className="flex justify-end gap-2 md:gap-3">
               <button onClick={() => setIsConfirmModalOpen(false)} className={glassButtonSecondary}>취소</button>
-              <button onClick={handleConfirmRegister} className="px-5 py-2 md:px-6 md:py-2.5 text-white bg-blue-600 hover:bg-blue-700 rounded-xl font-bold shadow-md transition-all text-sm md:text-base">전송 승인</button>
+              {/* ⭐️ [수정된 부분] */}
+              <button onClick={handleConfirmRegister} className={`px-5 py-2 md:px-6 md:py-2.5 rounded-xl font-bold shadow-md transition-all text-sm md:text-base ${colorVariants.blue}`}>전송 승인</button>
             </div>
           </div>
         </div>
@@ -1414,7 +1401,8 @@ export default function App() {
             
             <div className="flex justify-end gap-2 md:gap-3 border-t border-slate-200/50 pt-4 md:pt-5 relative z-10">
               <button onClick={() => setEditModal({...editModal, isOpen: false})} className={glassButtonSecondary}>취소</button>
-              <button onClick={handleConfirmEdit} className="px-5 py-2 md:px-6 md:py-2.5 text-white bg-blue-600 hover:bg-blue-700 rounded-xl font-bold shadow-md transition-all text-sm md:text-base">수정 저장</button>
+              {/* ⭐️ [수정된 부분] */}
+              <button onClick={handleConfirmEdit} className={`px-5 py-2 md:px-6 md:py-2.5 rounded-xl font-bold shadow-md transition-all text-sm md:text-base ${colorVariants.blue}`}>수정 저장</button>
             </div>
 
             {/* ⭐️ 달력 모듈: 수정 모달에서도 동일하게 Y축은 모달 기준 약간 위쪽(top-12), X축은 우측 여백(right-12) 할당 */}
