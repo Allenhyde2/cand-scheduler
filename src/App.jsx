@@ -9,6 +9,22 @@ const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
+// 파일 상단에 추가
+const colorVariants = {
+  // 기본 액션 버튼용 (Primary)
+  blue: 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30',
+  // 삭제 또는 경고용 (Danger)
+  red: 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/30',
+  // 성공 또는 판매중 상태용 (Success)
+  green: 'bg-green-600 hover:bg-green-700 text-white shadow-green-500/30',
+  // 어드민 또는 포인트 컬러용 (Purple)
+  purple: 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/30',
+  // 수정 버튼 등에 쓰이는 연한 파랑
+  edit: 'bg-blue-50 hover:bg-blue-100 text-blue-600 border-blue-200',
+  // 삭제 버튼 등에 쓰이는 연한 빨강
+  delete: 'bg-red-50 hover:bg-red-100 text-red-600 border-red-200'
+};
+
 // 파일 상단, createCodeChallenge 함수 아래쯤에 추가하세요.
 const GlobalStyles = () => (
   <style dangerouslySetInnerHTML={{__html: `
