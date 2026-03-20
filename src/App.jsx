@@ -9,6 +9,33 @@ const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
+// ⭐️ Vite 기본 CSS(너비 제한) 강제 무력화 및 공통 스타일 (분리형)
+const GlobalStyles = () => (
+  <style dangerouslySetInnerHTML={{__html: `
+    /* html, body, #root 모두의 크기 제한을 풀고 전체 화면으로 확장 */
+    html, body, #root {
+      max-width: none !important;
+      width: 100vw !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      display: block !important; /* Vite 기본 flex 중앙 정렬 강제 무력화 (핵심) */
+      text-align: left !important;
+      overflow-x: hidden !important;
+    }
+    
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.5); }
+    
+    @keyframes fadeInFast {
+      0% { opacity: 0; transform: translateY(5px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in-fast { animation: fadeInFast 0.2s ease-out forwards; }
+  `}} />
+);
+
 // --- ⭐️ 커스텀 글래스몰피즘 Select 드랍다운 ---
 function GlassSelect({ value, options, onChange, placeholder = "선택해주세요" }) {
   const [isOpen, setIsOpen] = useState(false);
