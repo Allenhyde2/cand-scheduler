@@ -278,12 +278,15 @@ export default function App() {
         }
 
         try {
-          const res = await fetch('https://canpass.me/oauth2/token', {
+          const redirectUri = `${window.location.origin}/canpass/callback`;
+
+          // ⭐️ 직접 호출 대신 Vercel 프록시(/api/token)를 사용하여 시크릿 키와 필수 파라미터를 안전하게 전송합니다.
+          const res = await fetch('/api/token', {
             method: 'POST',
-            headers: { 'content-type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-              grant_type: 'authorization_code',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
               client_id: CLIENT_ID,
+              redirect_uri: redirectUri,
               code: code,
               code_verifier: codeVerifier
             })
@@ -291,7 +294,7 @@ export default function App() {
 
           if (!res.ok) {
             const errData = await res.json();
-            throw new Error(errData.error_description || '토큰 발급 실패');
+            throw new Error(errData.error_description || errData.error || '토큰 발급 실패');
           }
 
           const data = await res.json();
