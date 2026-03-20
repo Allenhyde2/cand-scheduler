@@ -728,15 +728,16 @@ export default function App() {
   // ==========================================
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen w-full bg-gradient-to-br from-indigo-100 via-slate-50 to-purple-100 flex items-center justify-center p-4 sm:p-6 font-sans text-slate-800 relative overflow-hidden">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse"></div>
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30"></div>
+      // ⭐️ 전체 배경: w-screen 적용 및 오버플로우 처리
+      <div className="min-h-screen w-screen bg-gradient-to-br from-indigo-100 via-slate-50 to-purple-100 flex items-center justify-center p-4 sm:p-6 font-sans text-slate-800 relative overflow-hidden">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse pointer-events-none"></div>
+        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse pointer-events-none"></div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
         
         <CustomUI />
 
-        {/* ⭐️ 배경은 전체화면 유지, 모달은 최대 500px로 고정하되 그보다 화면이 좁아지면(w-full) 자연스럽게 반응형으로 줄어듭니다. */}
-        <div className="w-full max-w-[500px] relative z-10 transition-all duration-300">
+        {/* ⭐️ 모달 래퍼: max-w-md(최대 448px) 고정, 모바일에서는 w-full 적용 */}
+        <div className="w-full max-w-md relative z-10 transition-all duration-300 mx-auto">
           <div className="bg-white/40 backdrop-blur-2xl border border-white/60 rounded-[2.5rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.1)] overflow-hidden">
             <div className="pt-10 sm:pt-12 pb-4 text-center flex flex-col items-center">
               <img src="https://ca.group-edge.net/i/G0IZUDWCL-logo-r1xy6d/logo" alt="VAKE Logo" className="h-14 sm:h-16 mb-3 object-contain drop-shadow-md" />
@@ -802,10 +803,10 @@ export default function App() {
   }
 
   // ==========================================
-  // 메인 대시보드 화면 (Glassmorphism & Bento & 반응형 유지)
+  // 메인 대시보드 화면 (Glassmorphism & Bento)
   // ==========================================
   return (
-    <div className="flex h-screen w-full bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 text-slate-800 font-sans overflow-hidden p-2 md:p-4 gap-4 relative">
+    <div className="flex h-screen w-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 text-slate-800 font-sans overflow-hidden p-2 md:p-4 gap-4 relative">
       <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
       <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
 
@@ -1153,8 +1154,17 @@ export default function App() {
         </div>
       )}
       
-      {/* 부드러운 페이드 인 효과 추가 */}
+      {/* 부드러운 페이드 인 효과 및 ⭐️ #root 기본 CSS 초기화 (배경 갇힘 해결 핵심) */}
       <style dangerouslySetInnerHTML={{__html: `
+        /* Vite 기본 index.css 에 걸린 너비 제한 강제 해제 */
+        #root {
+          max-width: none !important;
+          width: 100vw !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          text-align: left !important;
+        }
+        
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.3); border-radius: 10px; }
