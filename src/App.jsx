@@ -796,7 +796,13 @@ export default function App() {
   // --- 글래스몰피즘 공통 클래스 ---
   const glassPanel = "bg-white/60 backdrop-blur-xl border border-white/50 shadow-sm rounded-3xl";
   const glassInput = "w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 shadow-sm placeholder-slate-400";
-  const glassButtonPrimary = "w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-500/30 transition-all";
+  // 특정 색상을 인자로 받아 클래스를 완성하는 함수 형태로 변경하면 더 강력해집니다.
+  const getButtonClass = (colorKey = 'blue') => {
+    const base = "w-full py-3.5 font-bold rounded-2xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50";
+    return `${base} ${colorVariants[colorKey] || colorVariants.blue}`;
+  };
+  // 기존에 쓰이던 변수명도 유지 (기본값 파란색)
+  const glassButtonPrimary = getButtonClass('blue');
   const glassButtonSecondary = "px-4 py-2 bg-white/60 hover:bg-white/90 border border-white/60 rounded-xl text-slate-700 font-bold shadow-sm transition-all text-sm";
 
   const statusOptions = [
