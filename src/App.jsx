@@ -1,4 +1,3 @@
-@import "tailwindcss";
 import React, { useState, useEffect, useRef } from 'react';
 
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
