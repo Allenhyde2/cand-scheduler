@@ -166,6 +166,17 @@ export default function App() {
   
   const [tasks, setTasks] = useState([]);
 
+  // --- ⭐️ 복원됨: 상품 목록 필터 및 페이지네이션 상태 ---
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [filters, setFilters] = useState({ name: '', sku: '', tag: '', status: [], display: 'all' });
+  const [pagingAfter, setPagingAfter] = useState(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // --- ⭐️ 복원됨: 상품 정보 수정 모달 상태 ---
+  const [productEditModal, setProductEditModal] = useState({
+    isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: ''
+  });
+
   const [scheduleForm, setScheduleForm] = useState({
     products: [],
     status: 'onSale',
@@ -195,43 +206,26 @@ export default function App() {
   const productSelectRef = useRef(null);
 
   useEffect(() => {
-    const handleResize = () => {
-      if (window.innerWidth > 768) {
-        setIsSidebarOpen(true);
-      } else {
-        setIsSidebarOpen(false);
-      }
-    };
+    const handleResize = () => { setIsSidebarOpen(window.innerWidth > 768); };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   useEffect(() => {
     if (isAuthenticated) return;
-    
     const updateHeight = () => {
-      if (loginMode === 'seller' && sellerInfoRef.current) {
-        setInfoHeight(sellerInfoRef.current.offsetHeight);
-      } else if (loginMode === 'admin' && adminInfoRef.current) {
-        setInfoHeight(adminInfoRef.current.offsetHeight);
-      }
+      if (loginMode === 'seller' && sellerInfoRef.current) setInfoHeight(sellerInfoRef.current.offsetHeight);
+      else if (loginMode === 'admin' && adminInfoRef.current) setInfoHeight(adminInfoRef.current.offsetHeight);
     };
-    
     requestAnimationFrame(updateHeight);
     const timeoutId = setTimeout(updateHeight, 50);
     window.addEventListener('resize', updateHeight);
-    
-    return () => {
-      clearTimeout(timeoutId);
-      window.removeEventListener('resize', updateHeight);
-    };
+    return () => { clearTimeout(timeoutId); window.removeEventListener('resize', updateHeight); };
   }, [loginMode, isAdminAdvancedOpen, isAuthenticated]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (productSelectRef.current && !productSelectRef.current.contains(event.target)) {
-        setIsProductSelectOpen(false);
-      }
+      if (productSelectRef.current && !productSelectRef.current.contains(event.target)) setIsProductSelectOpen(false);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -239,9 +233,7 @@ export default function App() {
 
   const showToast = (message, type = 'info') => {
     setToast({ visible: true, message, type });
-    setTimeout(() => {
-      setToast(prev => ({ ...prev, visible: false }));
-    }, 3500);
+    setTimeout(() => setToast(prev => ({ ...prev, visible: false })), 3500);
   };
 
   const showConfirm = (message, onConfirm) => {
@@ -250,6 +242,56 @@ export default function App() {
 
   const closeConfirm = () => {
     setConfirmDialog({ visible: false, message: '', onConfirm: null });
+  };
+
+  const getAuthHeaders = (currentToken) => ({
+    'content-type': 'application/json',
+    'authorization': `Bearer ${currentToken || token}`,
+    'x-can-community-id': communityId,
+  });
+
+  // --- ⭐️ 복원됨: 판매자 ID 자동 탐지 로직 ---
+  const autoFetchSellerId = async (accessToken) => {
+    try {
+      const fetchOptions = {
+        method: 'GET',
+        headers: {
+          'content-type': 'application/json',
+          'authorization': `Bearer ${accessToken}`,
+          'x-can-community-id': communityId
+        }
+      };
+
+      let res = await fetch(`/api/proxy?endpoint=users/me`, fetchOptions);
+      if (!res.ok) res = await fetch(`/api/proxy?endpoint=me`, fetchOptions);
+      if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
+      
+      const data = await res.json();
+      let sellerProfileId = data.profiles?.find(p => p.profileId && p.profileId.startsWith('CS:'))?.profileId;
+      
+      if (!sellerProfileId && data.id) {
+        const bulkRes = await fetch(`/api/proxy?endpoint=users/bulk`, {
+          method: 'POST', headers: fetchOptions.headers, body: JSON.stringify({ ids: [data.id] })
+        });
+        if (bulkRes.ok) {
+          const bulkData = await bulkRes.json();
+          const userData = Array.isArray(bulkData) ? bulkData[0] : bulkData;
+          sellerProfileId = userData?.profiles?.find(p => p.profileId && p.profileId.startsWith('CS:'))?.profileId;
+        }
+      }
+      return sellerProfileId || null; 
+    } catch (err) {
+      return null;
+    }
+  };
+
+  const handleManualSaveSellerId = (inputId) => {
+    const cleanId = (inputId || '').trim();
+    if (!cleanId) return showToast('판매자 아이디를 정확히 입력해주세요.', 'error');
+    setSellerId(cleanId);
+    localStorage.setItem('cand_seller_id', cleanId);
+    showToast(`셀러 ID(${cleanId})가 세팅되었습니다. 목록을 불러옵니다.`, 'success');
+    fetchProductsWithArgs(token, cleanId, loginMode, false);
   };
 
   useEffect(() => {
@@ -269,7 +311,8 @@ export default function App() {
         setIsLoginProcessing(true);
         const savedState = sessionStorage.getItem('oauth_state');
         const codeVerifier = sessionStorage.getItem('oauth_verifier');
-        const savedSellerId = localStorage.getItem('cand_seller_id');
+        const savedLoginMode = sessionStorage.getItem('cand_login_mode') || 'seller';
+        const savedAdminTargetId = localStorage.getItem('cand_admin_target_id');
 
         if (stateParam !== savedState) {
           showToast('비정상적인 로그인 접근입니다.', 'error');
@@ -280,36 +323,37 @@ export default function App() {
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
 
-          // ⭐️ 직접 호출 대신 Vercel 프록시(/api/token)를 사용하여 시크릿 키와 필수 파라미터를 안전하게 전송합니다.
           const res = await fetch('/api/token', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              client_id: CLIENT_ID,
-              redirect_uri: redirectUri,
-              code: code,
-              code_verifier: codeVerifier
-            })
+            method: 'POST', headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ client_id: CLIENT_ID, code: code, code_verifier: codeVerifier, redirect_uri: redirectUri })
           });
 
-          if (!res.ok) {
-            const errData = await res.json();
-            throw new Error(errData.error_description || errData.error || '토큰 발급 실패');
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error_description || data.error || '토큰 발급 실패');
+
+          const accessToken = data.access_token;
+          let finalSellerId = '';
+
+          // ⭐️ 복원됨: 로그인 모드에 따른 셀러 ID 자동 분기 처리
+          if (savedLoginMode === 'admin') {
+            finalSellerId = savedAdminTargetId || '';
+          } else {
+            const autoId = await autoFetchSellerId(accessToken);
+            if (autoId) { finalSellerId = autoId; } 
+            else { showToast('보안 정책으로 셀러 ID 자동 탐지에 실패했습니다. 환경설정에서 수동으로 입력해주세요.', 'warning'); }
           }
 
-          const data = await res.json();
-          const accessToken = data.access_token;
-          
-          const loggedInSellerId = savedSellerId || '';
-
           setToken(accessToken);
-          setSellerId(loggedInSellerId);
+          setSellerId(finalSellerId);
+          setLoginMode(savedLoginMode);
           setIsAuthenticated(true);
+          
           localStorage.setItem('cand_token', accessToken);
-          localStorage.setItem('cand_seller_id', loggedInSellerId);
+          localStorage.setItem('cand_seller_id', finalSellerId);
+          localStorage.setItem('cand_login_mode', savedLoginMode);
 
-          fetchProductsWithArgs(accessToken, DEFAULT_GROUP_ID, loggedInSellerId);
-          fetchScheduledTasks(accessToken, DEFAULT_GROUP_ID);
+          fetchProductsWithArgs(accessToken, finalSellerId, savedLoginMode, false);
+          fetchScheduledTasks(accessToken);
           showToast('캔패스 로그인이 완료되었습니다.', 'success');
 
         } catch (err) {
@@ -332,8 +376,8 @@ export default function App() {
           setSellerId(savedSellerId || '');
           setLoginMode(savedMode);
           setIsAuthenticated(true);
-          fetchProductsWithArgs(savedToken, DEFAULT_GROUP_ID, savedSellerId);
-          fetchScheduledTasks(savedToken, DEFAULT_GROUP_ID);
+          fetchProductsWithArgs(savedToken, savedSellerId, savedMode, false);
+          fetchScheduledTasks(savedToken);
         }
 
         if (savedRecentProducts) {
@@ -347,13 +391,11 @@ export default function App() {
 
   const handleOAuthLogin = async (e) => {
     e.preventDefault();
-    
     if (loginMode === 'admin') {
       localStorage.setItem('cand_admin_target_id', sellerId.trim());
     } else {
       localStorage.setItem('cand_admin_target_id', '');
     }
-    
     sessionStorage.setItem('cand_login_mode', loginMode);
 
     const codeVerifier = createCodeVerifier();
@@ -367,112 +409,97 @@ export default function App() {
 
     const authUrl = new URL('https://canpass.me/oauth2/authorize');
     authUrl.search = new URLSearchParams({
-      response_type: 'code',
-      action: 'signin',
-      client_id: CLIENT_ID,
-      code_challenge: codeChallenge,
-      code_challenge_method: 'S256',
-      redirect_uri: redirectUri,
-      community_id: DEFAULT_GROUP_ID,
-      state: state,
-      scope: SCOPES 
+      response_type: 'code', action: 'signin', client_id: CLIENT_ID,
+      code_challenge: codeChallenge, code_challenge_method: 'S256',
+      redirect_uri: redirectUri, community_id: DEFAULT_GROUP_ID, state, scope: SCOPES 
     }).toString();
 
     window.location.href = authUrl.toString();
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('cand_token');
+    localStorage.removeItem('cand_seller_id');
+    localStorage.removeItem('cand_login_mode');
     setIsAuthenticated(false);
     setActiveTab('productList');
     setToken('');
     setSellerId('');
     setProducts([]);
     setTasks([]);
-    localStorage.removeItem('cand_token');
-    localStorage.removeItem('cand_seller_id');
-    localStorage.removeItem('cand_login_mode');
+    showToast('로그아웃 되었습니다.', 'success');
   };
 
-  const getAuthHeaders = (currentToken, currentCommunityId) => ({
-    'content-type': 'application/json',
-    'authorization': `Bearer ${currentToken || token}`,
-    'x-can-community-id': currentCommunityId || communityId,
-  });
-
-  const fetchScheduledTasks = async (currentToken, currentCommunityId) => {
+  const fetchScheduledTasks = async (currentToken) => {
     try {
       const res = await fetch(SCHEDULER_API_URL, {
-        method: 'POST',
-        headers: getAuthHeaders(currentToken, currentCommunityId), 
-        body: JSON.stringify({
-          action: 'LIST', 
-          token: currentToken,
-          communityId: currentCommunityId
-        })
+        method: 'POST', headers: getAuthHeaders(currentToken), 
+        body: JSON.stringify({ action: 'LIST', token: currentToken, communityId })
       });
 
       if (!res.ok) {
         if (res.status === 500) {
-          showToast('⚠️ 서버(Lambda)에 목록 조회(LIST) 기능이 없어 빈 목록을 표시합니다.', 'error');
           setTasks([]);
           return;
         }
         throw new Error(`서버 응답 오류: ${res.status}`);
       }
 
-      // ⭐️ 불안정한 content-type 헤더 검사 로직을 제거하고, 데이터를 바로 텍스트로 읽은 뒤 JSON 파싱 시도
       const responseText = await res.text();
       let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error("스케줄러 응답 에러 (JSON 파싱 실패):", responseText);
-        throw new Error("서버가 JSON이 아닌 데이터를 반환했습니다.");
-      }
+      try { data = JSON.parse(responseText); } 
+      catch (e) { throw new Error("서버가 JSON이 아닌 데이터를 반환했습니다."); }
 
       const fetchedList = data.tasks || data.data || (Array.isArray(data) ? data : []);
-
       const formattedTasks = fetchedList.map(task => ({
-        ...task,
-        logs: task.logs || [`☁️ 서버에서 저장된 예약 정보를 불러왔습니다. (${new Date().toLocaleTimeString()})`]
+        ...task, logs: task.logs || [`☁️ 서버에서 저장된 예약 정보를 불러왔습니다. (${new Date().toLocaleTimeString()})`]
       }));
 
       setTasks(formattedTasks);
-      
     } catch (err) {
       console.error('예약 목록 조회 실패 상세 에러:', err);
-      if (err.message.includes('Failed to fetch')) {
-        showToast('CORS 오류: 스케줄러 서버 연동 실패. AWS API Gateway 설정을 확인하세요.', 'error');
-      } else {
-        showToast(`목록 갱신 실패: ${err.message}`, 'error');
-      }
     }
   };
 
-  const fetchProductsWithArgs = async (currentToken, currentCommunityId, currentSellerId) => {
-    setIsLoading(true);
+  // --- ⭐️ 복원됨: 상품 목록 및 페이지네이션/필터 처리 통신 로직 ---
+  const fetchProductsWithArgs = async (currentToken, currentSellerId, currentMode, isLoadMore = false) => {
+    if (currentMode === 'seller' && !currentSellerId) return;
+    
+    if (isLoadMore) setIsLoadingMore(true);
+    else setIsLoading(true);
+
     try {
       const activeToken = currentToken || token;
-      const activeCommunityId = currentCommunityId || communityId;
-      const activeSellerId = currentSellerId || sellerId;
-
-      // ⭐️ 로컬 환경이든 배포 환경이든 토큰이 없으면 API를 찌르지 않고 막아 403 에러를 방지합니다.
       if (!activeToken) throw new Error("유효한 토큰이 없습니다. 다시 로그인해주세요.");
 
-      // ⭐️ 하드코딩된 절대 경로를 지우고 상대 경로를 사용하여 Vite 프록시 설정이 정상 동작하게 합니다.
-      const url = `/api/proxy?endpoint=products&limit=100`;
+      const params = new URLSearchParams();
+      params.append('endpoint', 'products');
+      params.append('limit', '50'); 
+      params.append('order', 'DESC');
+      
+      if (isLoadMore && pagingAfter) params.append('after', pagingAfter);
 
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: getAuthHeaders(activeToken, activeCommunityId)
-      });
+      if (filters.name) params.append('query', filters.name);
+      if (filters.sku) params.append('sku', filters.sku);
+      if (filters.tag) params.append('tag', filters.tag);
+      
+      const searchSellerId = currentMode === 'seller' ? currentSellerId : (currentSellerId || filters.sellerId);
+      if (searchSellerId) params.append('sellerId', searchSellerId);
+
+      if (filters.status.length > 0) {
+        filters.status.forEach(s => params.append('status', s));
+      }
+      if (filters.display !== 'all') {
+        params.append('isDisplayed', filters.display);
+      }
+
+      const url = `/api/proxy?${params.toString()}`;
+      const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken) });
       
       const responseText = await res.text();
 
       if (!res.ok) {
-        console.error("API 호출 실패 응답:", responseText);
         let errorMessage = `API 오류: ${res.status}`;
-        // ⭐️ 403 에러 발생 시, 본섭에서 넘겨준 진짜 원인(메시지)을 토스트로 보여주도록 에러 핸들링 보강
         try {
           const errData = JSON.parse(responseText);
           errorMessage += ` - ${errData.message || errData.error || '접근 권한이 없습니다.'}`;
@@ -480,24 +507,17 @@ export default function App() {
         throw new Error(errorMessage);
       }
       
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (parseError) {
-        console.error("🔥 프록시 에러 (JSON이 아님):", responseText);
-        throw new Error("상품 목록을 불러오는 프록시 서버 설정에 문제가 있습니다.");
+      const data = JSON.parse(responseText);
+      const list = data.data || [];
+      
+      if (isLoadMore) {
+        setProducts(prev => [...prev, ...list]);
+      } else {
+        setProducts(list);
       }
 
-      let fetchedList = data.data || [];
+      setPagingAfter(data.paging && data.paging.after ? data.paging.after : null);
 
-      if (activeSellerId) {
-        fetchedList = fetchedList.filter(p => {
-          const idField = p.userId || p.sellerId || p.creatorId; 
-          return idField ? idField === activeSellerId : true;
-        });
-      }
-
-      setProducts(fetchedList);
     } catch (err) {
       console.error('목록 로드 실패 상세 에러:', err);
       if (err.message.includes('Failed to fetch')) {
@@ -507,11 +527,54 @@ export default function App() {
       }
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
     }
   };
 
-  const fetchProducts = () => {
-    fetchProductsWithArgs(token, communityId, sellerId);
+  const resetFilters = () => setFilters({ name: '', sku: '', tag: '', status: [], display: 'all' });
+
+  const applyFilters = () => {
+    setPagingAfter(null);
+    fetchProductsWithArgs(token, sellerId, loginMode, false);
+  };
+
+  const loadMoreProducts = () => fetchProductsWithArgs(token, sellerId, loginMode, true);
+  const fetchProducts = () => fetchProductsWithArgs(token, sellerId, loginMode, false);
+
+  const openProductEditModal = (p) => {
+    setProductEditModal({
+      isOpen: true, id: p.id, name: p.name || '', price: p.price || 0,
+      stockType: p.stockCount === null || p.stockCount === undefined ? 'unlimited' : 'limited',
+      stockCount: p.stockCount || '', isDisplayed: p.isDisplayed !== false ? 'true' : 'false',
+      status: p.status || 'onSale', description: p.description || ''
+    });
+  };
+
+  const closeProductEditModal = () => setProductEditModal(prev => ({ ...prev, isOpen: false }));
+
+  const handleUpdateProduct = async () => {
+    const { id, name, price, stockType, stockCount, isDisplayed, status, description } = productEditModal;
+    const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
+
+    const updateData = {
+      name: name, price: Number(price), stockCount: finalStockCount, status: status,
+      description: description, isDisplayed: isDisplayed === 'true'
+    };
+
+    try {
+      showToast('상품 정보를 갱신 중입니다...', 'info');
+      const res = await fetch(`/api/proxy?endpoint=products/${id}`, {
+        method: 'PUT', headers: getAuthHeaders(token), body: JSON.stringify(updateData)
+      });
+      
+      if (!res.ok) throw new Error();
+      
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updateData } : p));
+      closeProductEditModal();
+      showToast('상품이 성공적으로 수정되었습니다.', 'success');
+    } catch (err) {
+      showToast('상품 수정에 실패했습니다.', 'error');
+    }
   };
 
   const handleSelectProduct = (product) => {
@@ -581,7 +644,7 @@ export default function App() {
         const newTaskId = Math.random().toString(36).substr(2, 9);
         const res = await fetch(SCHEDULER_API_URL, {
           method: 'POST',
-          headers: getAuthHeaders(token, communityId),
+          headers: getAuthHeaders(token),
           body: JSON.stringify({
             action: 'CREATE', taskId: newTaskId, productId: prod.id,
             newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
@@ -613,7 +676,7 @@ export default function App() {
       
       const response = await fetch(SCHEDULER_API_URL, {
         method: 'POST', 
-        headers: getAuthHeaders(token, communityId), 
+        headers: getAuthHeaders(token), 
         body: JSON.stringify({
           action: 'DELETE', 
           taskId: task.id,
@@ -637,13 +700,7 @@ export default function App() {
     const [date, time] = localISOTime.split('T');
 
     setEditModal({
-      isOpen: true,
-      task,
-      status: task.newStatus,
-      isDisplayed: task.newIsDisplayed ? 'true' : 'false',
-      date,
-      time,
-      isDatePickerOpen: false
+      isOpen: true, task, status: task.newStatus, isDisplayed: task.newIsDisplayed ? 'true' : 'false', date, time, isDatePickerOpen: false
     });
   };
 
@@ -656,7 +713,7 @@ export default function App() {
       
       const response = await fetch(SCHEDULER_API_URL, {
         method: 'POST', 
-        headers: getAuthHeaders(token, communityId), 
+        headers: getAuthHeaders(token), 
         body: JSON.stringify({
           action: 'UPDATE',
           taskId: editModal.task.id,
@@ -738,19 +795,17 @@ export default function App() {
   );
 
   // ==========================================
-  // 로그인 화면 (글래스몰피즘 유지)
+  // 로그인 화면 (글래스몰피즘 + 오류 없는 반응형 너비 설정)
   // ==========================================
   if (!isAuthenticated) {
     return (
-      // ⭐️ 전체 배경: w-screen 적용 및 오버플로우 처리
-      <div className="min-h-screen w-screen bg-gradient-to-br from-indigo-100 via-slate-50 to-purple-100 flex items-center justify-center p-4 sm:p-6 font-sans text-slate-800 relative overflow-hidden">
+      <div className="min-h-screen w-full bg-gradient-to-br from-indigo-100 via-slate-50 to-purple-100 flex items-center justify-center p-4 sm:p-6 font-sans text-slate-800 relative overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse pointer-events-none"></div>
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-[80px] opacity-40 animate-pulse pointer-events-none"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
         
         <CustomUI />
 
-        {/* ⭐️ 모달 래퍼: max-w-md(최대 448px) 고정, 모바일에서는 w-full 적용 */}
         <div className="w-full max-w-md relative z-10 transition-all duration-300 mx-auto">
           <div className="bg-white/40 backdrop-blur-2xl border border-white/60 rounded-[2.5rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.1)] overflow-hidden">
             <div className="pt-10 sm:pt-12 pb-4 text-center flex flex-col items-center">
@@ -820,7 +875,7 @@ export default function App() {
   // 메인 대시보드 화면 (Glassmorphism & Bento)
   // ==========================================
   return (
-    <div className="flex h-screen w-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 text-slate-800 font-sans overflow-hidden p-2 md:p-4 gap-4 relative">
+    <div className="flex h-screen w-full bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 text-slate-800 font-sans overflow-hidden p-2 md:p-4 gap-4 relative">
       <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
       <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
 
@@ -866,50 +921,132 @@ export default function App() {
 
         <div className="flex-1 overflow-hidden relative">
           
+          {/* ⭐️ 복원됨: 필터 UI 및 제품 목록 (Glassmorphism 룩업 추가 적용) */}
           {activeTab === 'productList' && (
             <div className={`${glassPanel} flex flex-col h-full overflow-hidden`}>
               <div className="p-4 md:p-6 border-b border-white/40 flex justify-between items-center shrink-0">
                 <h3 className="font-extrabold text-base md:text-lg text-slate-700">{loginMode === 'admin' && !sellerId ? '전체 상품' : '내 상품'}</h3>
-                <button onClick={fetchProducts} disabled={isLoading} className={glassButtonSecondary} title="새로고침">
-                  <span className="flex items-center gap-1 md:gap-2"><svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg> <span className="hidden sm:inline">최신화</span></span>
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={`${glassButtonSecondary} flex items-center gap-1.5`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                    <span className="hidden sm:inline">상세 필터</span>
+                  </button>
+                  <button onClick={applyFilters} disabled={isLoading} className={glassButtonSecondary} title="새로고침">
+                    <span className="flex items-center gap-1 md:gap-2"><svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg></span>
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-auto custom-scrollbar">
+              {isFilterOpen && (
+                <div className="bg-white/40 backdrop-blur-md border-b border-white/50 p-4 sm:p-6 shadow-inner shrink-0 z-10">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                    <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">상품 이름</label>
+                        <input type="text" value={filters.name} onChange={e => setFilters({...filters, name: e.target.value})} className={glassInput} placeholder="상품명 검색"/>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">SKU 번호</label>
+                        <input type="text" value={filters.sku} onChange={e => setFilters({...filters, sku: e.target.value})} className={`${glassInput} font-mono`} placeholder="SKU 입력"/>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">태그</label>
+                        <input type="text" value={filters.tag} onChange={e => setFilters({...filters, tag: e.target.value})} className={glassInput} placeholder="태그 입력"/>
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">판매 상태</label>
+                      <div className="flex flex-wrap gap-2">
+                        {['scheduled', 'onSale', 'soldOut', 'completed'].map(val => (
+                          <label key={val} className={`cursor-pointer border border-white/60 shadow-sm rounded-xl px-4 py-2 text-xs font-bold transition-all ${filters.status.includes(val) ? 'bg-blue-500 text-white shadow-blue-500/30' : 'bg-white/50 text-slate-600 hover:bg-white'}`}>
+                            <input type="checkbox" className="hidden" checked={filters.status.includes(val)} onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFilters(prev => ({...prev, status: checked ? [...prev.status, val] : prev.status.filter(s => s !== val)}));
+                            }}/> {translateStatus(val)}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">진열 상태</label>
+                      <div className="flex flex-wrap gap-3">
+                        {[ {label: '전체 보기', val: 'all'}, {label: '진열 중인 상품', val: 'true'}, {label: '숨겨진 상품', val: 'false'} ].map(opt => (
+                          <label key={opt.val} className="flex items-center gap-2 cursor-pointer text-xs font-bold text-slate-700 bg-white/50 border border-white/60 px-4 py-2 rounded-xl shadow-sm hover:bg-white transition-all">
+                            <input type="radio" name="displayFilter" value={opt.val} checked={filters.display === opt.val} onChange={e => setFilters({...filters, display: e.target.value})} className="accent-blue-600 w-3.5 h-3.5"/> {opt.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-5 flex justify-end gap-2">
+                    <button onClick={resetFilters} className="px-5 py-2.5 bg-white/60 border border-white/60 text-slate-600 font-bold rounded-xl hover:bg-white transition-all shadow-sm text-xs sm:text-sm">조건 초기화</button>
+                    <button onClick={applyFilters} className="px-6 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-md shadow-blue-500/20 transition-all text-xs sm:text-sm">필터 적용하여 검색</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-auto custom-scrollbar relative">
                 <table className="w-full text-left text-sm whitespace-nowrap">
                   <thead className="bg-white/40 backdrop-blur-md border-b border-white/40 text-slate-500 sticky top-0 z-10">
                     <tr>
                       <th className="px-4 md:px-6 py-3 md:py-4 font-extrabold uppercase text-[10px] md:text-xs w-12 md:w-16">Img</th>
                       <th className="px-4 md:px-6 py-3 md:py-4 font-extrabold uppercase text-[10px] md:text-xs">상품 정보</th>
                       <th className="px-4 md:px-6 py-3 md:py-4 font-extrabold uppercase text-[10px] md:text-xs text-right">가격</th>
-                      <th className="px-4 md:px-6 py-3 md:py-4 font-extrabold uppercase text-[10px] md:text-xs text-center hidden sm:table-cell">상태</th>
+                      <th className="px-4 md:px-6 py-3 md:py-4 font-extrabold uppercase text-[10px] md:text-xs text-center hidden md:table-cell">재고</th>
+                      <th className="px-4 md:px-6 py-3 md:py-4 font-extrabold uppercase text-[10px] md:text-xs text-center">상태</th>
                       <th className="px-4 md:px-6 py-3 md:py-4 font-extrabold uppercase text-[10px] md:text-xs text-center">관리</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/40">
-                    {products.length === 0 ? (
-                      <tr><td colSpan="5" className="p-10 md:p-20 text-center text-slate-400 font-bold text-sm">조회된 상품이 없습니다.</td></tr>
+                    {(loginMode === 'seller' && !sellerId) ? (
+                      <tr><td colSpan="6" className="p-10 md:p-20 text-center text-slate-500">
+                        <div className="bg-white/60 p-6 rounded-2xl border border-white/60 shadow-sm max-w-sm mx-auto">
+                          <p className="mb-2 font-extrabold text-red-500 text-sm">⚠️ 셀러 ID 추출 실패</p>
+                          <p className="text-[11px] mb-5 text-slate-500 font-bold leading-relaxed">접근 권한 제한으로 인해 판매자 아이디를 찾지 못했습니다.<br/>아래에 직접 아이디를 입력해주세요.</p>
+                          <div className="flex flex-col gap-2">
+                            <input type="text" id="manualInputFallback" placeholder="ex) CS:P8XLJRM3" className={glassInput} />
+                            <button onClick={() => handleManualSaveSellerId(document.getElementById('manualInputFallback').value)} className={glassButtonPrimary}>입력 저장 및 조회하기</button>
+                          </div>
+                        </div>
+                      </td></tr>
+                    ) : isLoading && products.length === 0 ? (
+                      <tr><td colSpan="6" className="p-20 text-center">
+                        <div className="flex flex-col items-center justify-center space-y-4">
+                          <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin shadow-md"></div>
+                          <p className="font-extrabold text-blue-600 text-sm animate-pulse tracking-widest uppercase">Loading...</p>
+                        </div>
+                      </td></tr>
+                    ) : products.length === 0 ? (
+                      <tr><td colSpan="6" className="p-16 text-center text-slate-400 font-extrabold text-sm">조회된 상품이 없습니다.</td></tr>
                     ) : (
-                      products.map(product => {
-                        const imgUrl = product.images?.mobile?.[0] || product.images?.web?.[0] || '';
+                      products.map(p => {
+                        const imgUrl = p.images?.mobile?.[0] || p.images?.web?.[0] || '';
                         return (
-                          <tr key={product.id} className="hover:bg-white/40 transition-colors group">
+                          <tr key={p.id} className="hover:bg-white/40 transition-colors group">
                             <td className="px-4 md:px-6 py-2 md:py-3">
-                              {imgUrl ? <img src={imgUrl} className="w-9 h-9 md:w-11 md:h-11 rounded-lg md:rounded-xl object-cover shadow-sm" alt="상품" /> : <div className="w-9 h-9 md:w-11 md:h-11 bg-slate-100/50 rounded-lg md:rounded-xl flex items-center justify-center text-slate-300 border border-slate-200/50"><svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>}
+                              {imgUrl ? <img src={imgUrl} className="w-9 h-9 md:w-12 md:h-12 rounded-xl object-cover shadow-sm border border-white/50" alt="상품" /> : <div className="w-9 h-9 md:w-12 md:h-12 bg-white/50 rounded-xl flex items-center justify-center text-slate-300 border border-white/50 shadow-inner"><svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg></div>}
                             </td>
                             <td className="px-4 md:px-6 py-3 md:py-4">
-                              <p className="font-extrabold text-slate-800 text-xs md:text-sm group-hover:text-blue-600 transition-colors max-w-[120px] sm:max-w-[200px] lg:max-w-xs truncate">{product.name}</p>
-                              <p className="text-[9px] md:text-[11px] text-slate-400 font-mono mt-1 bg-white/50 inline-block px-1.5 rounded">{product.id}</p>
+                              <p className="font-extrabold text-slate-800 text-xs md:text-sm group-hover:text-blue-600 transition-colors max-w-[120px] sm:max-w-[200px] lg:max-w-xs truncate">{p.name || '이름 없음'}</p>
+                              <div className="flex items-center gap-1.5 mt-1.5">
+                                <span className="text-[9px] md:text-[10px] text-slate-500 font-mono bg-white/60 border border-white/50 shadow-sm px-1.5 py-0.5 rounded">{p.id}</span>
+                                {p.sku && <span className="text-[9px] md:text-[10px] text-slate-400 font-mono font-bold">SKU: {p.sku}</span>}
+                              </div>
                             </td>
-                            <td className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm text-right font-mono font-bold text-slate-600">{product.price.toLocaleString()} <span className="text-[9px] md:text-[11px] font-sans text-slate-400">{product.currency || 'KRW'}</span></td>
-                            <td className="px-4 md:px-6 py-3 md:py-4 text-center hidden sm:table-cell">
+                            <td className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} <span className="text-[9px] md:text-[11px] font-sans text-slate-400 font-bold">{p.currency || 'KRW'}</span></td>
+                            <td className="px-4 md:px-6 py-3 md:py-4 text-center hidden md:table-cell">
+                              {p.stockCount !== null && p.stockCount !== undefined ? <span className="font-mono font-extrabold text-slate-700">{p.stockCount.toLocaleString()}</span> : <span className="text-[10px] text-slate-400 font-bold bg-white/50 px-2 py-1 rounded-md border border-white/50">무제한</span>}
+                            </td>
+                            <td className="px-4 md:px-6 py-3 md:py-4 text-center">
                               <div className="flex flex-col items-center gap-1.5">
-                                <span className={`inline-block px-2.5 py-1 rounded-lg text-[10px] md:text-[11px] font-extrabold shadow-sm ${product.status === 'onSale' ? 'bg-green-500 text-white' : product.status === 'soldOut' ? 'bg-red-500 text-white' : 'bg-slate-200 text-slate-600'}`}>{translateStatus(product.status)}</span>
-                                {!product.isDisplayed && <div className="text-[9px] md:text-[10px] text-slate-400 font-bold flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg> 숨김</div>}
+                                <span className={`inline-block px-2.5 py-1 rounded-lg text-[10px] md:text-[11px] font-extrabold shadow-sm border ${p.status === 'onSale' ? 'bg-green-500 text-white border-green-400' : p.status === 'soldOut' ? 'bg-red-500 text-white border-red-400' : 'bg-slate-100 text-slate-600 border-white/60'}`}>{translateStatus(p.status)}</span>
+                                {!p.isDisplayed && <div className="text-[9px] md:text-[10px] text-slate-400 font-bold flex items-center gap-1"><svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path></svg> 숨김</div>}
                               </div>
                             </td>
                             <td className="px-4 md:px-6 py-2 md:py-3 text-center">
-                              <button onClick={() => openProductEditModal(product)} className="text-slate-400 hover:text-blue-600 bg-white/40 hover:bg-white px-3 py-1.5 md:px-4 md:py-2 rounded-xl border border-white/60 shadow-sm transition-all text-[10px] md:text-xs font-bold flex items-center justify-center mx-auto gap-1 md:gap-1.5"><svg className="w-3.5 h-3.5 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> 수정</button>
+                              <button onClick={() => openProductEditModal(p)} className="text-slate-400 hover:text-blue-600 bg-white/40 hover:bg-white px-3 py-1.5 md:px-4 md:py-2 rounded-xl border border-white/60 shadow-sm transition-all text-[10px] md:text-xs font-bold flex items-center justify-center mx-auto gap-1 md:gap-1.5"><svg className="w-3.5 h-3.5 hidden md:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg> 수정</button>
                             </td>
                           </tr>
                         )
@@ -917,6 +1054,13 @@ export default function App() {
                     )}
                   </tbody>
                 </table>
+                {pagingAfter && (
+                  <div className="p-4 border-t border-white/40 text-center sticky bottom-0 bg-white/30 backdrop-blur-sm z-10">
+                    <button onClick={loadMoreProducts} disabled={isLoadingMore} className="px-6 py-2.5 bg-white/80 border border-white/80 rounded-2xl text-xs md:text-sm font-extrabold text-slate-700 hover:bg-white shadow-sm transition-all disabled:opacity-50 flex items-center mx-auto gap-2">
+                      {isLoadingMore ? <><div className="w-4 h-4 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div> 로딩 중...</> : '⬇️ 결과 더 불러오기'}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -932,7 +1076,7 @@ export default function App() {
                   
                   <form onSubmit={handlePreSubmit} className="space-y-4 md:space-y-5">
                     <div className="relative z-[60]" ref={productSelectRef}>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">1. 대상 상품 (검색)</label>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">1. 대상 상품 (다중 선택 검색)</label>
                       <input 
                         type="text"
                         placeholder="이름이나 ID 입력 후 클릭"
@@ -940,9 +1084,9 @@ export default function App() {
                         onChange={(e) => {
                           setProductSearchTerm(e.target.value);
                           if (!isProductSelectOpen) setIsProductSelectOpen(true);
-                          if (scheduleForm.productId) setScheduleForm({...scheduleForm, productId: ''});
                         }}
                         onFocus={() => setIsProductSelectOpen(true)}
+                        onKeyDown={handleProductKeyDown}
                         className={glassInput}
                       />
 
@@ -976,7 +1120,7 @@ export default function App() {
                       {scheduleForm.products && scheduleForm.products.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3 p-2.5 md:p-3 bg-white/40 rounded-2xl border border-white/60 shadow-inner max-h-32 overflow-y-auto custom-scrollbar">
                           {scheduleForm.products.map(prod => (
-                            <div key={prod.id} className="flex items-center bg-white border border-white/80 shadow-sm text-slate-700 px-2.5 py-1 md:py-1.5 rounded-xl text-xs font-bold">
+                            <div key={prod.id} className="flex items-center bg-white border border-white/80 shadow-sm text-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-bold">
                               <span className="mr-1.5 md:mr-2 truncate max-w-[100px] md:max-w-[150px]">{prod.name}</span>
                               <button type="button" onClick={() => handleRemoveProduct(prod.id)} className="text-slate-400 hover:text-red-500 transition"><svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
                             </div>
@@ -1030,7 +1174,7 @@ export default function App() {
                 <div className={`flex-1 min-h-[400px] shrink-0 ${glassPanel} p-5 md:p-6 flex flex-col overflow-hidden relative z-10`}>
                    <div className="flex justify-between items-center mb-5 md:mb-6 shrink-0 border-b border-white/40 pb-3 md:pb-4">
                      <h3 className="font-extrabold text-base md:text-lg text-slate-800">클라우드 대기열 <span className="text-[10px] md:text-[11px] font-bold text-blue-600 bg-white/60 px-2 py-1 rounded-lg ml-2 border border-white/50 shadow-sm hidden sm:inline-block">창을 닫아도 알아서 동작합니다.</span></h3>
-                     <button onClick={() => fetchScheduledTasks(token, communityId)} className={glassButtonSecondary}>새로고침</button>
+                     <button onClick={() => fetchScheduledTasks(token)} className={glassButtonSecondary}>새로고침</button>
                    </div>
                    
                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
@@ -1073,8 +1217,15 @@ export default function App() {
                   <div className="font-extrabold text-sm bg-white/50 px-4 py-3 rounded-2xl border border-white/60 text-slate-700 shadow-sm">VAKE</div>
                 </div>
                 <div>
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">Active Seller ID</label>
-                  <div className="font-mono text-sm bg-white/50 px-4 py-3 rounded-2xl border border-white/60 text-slate-700 shadow-sm truncate">{sellerId || 'N/A'}</div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">Active Seller ID (수동 변경 가능)</label>
+                  <div className="flex gap-2 relative">
+                    <input 
+                      type="text" value={sellerId} onChange={e => setSellerId(e.target.value)} 
+                      className={`${glassInput} font-mono`} 
+                      placeholder="셀러 ID 수동 변경"
+                    />
+                    <button onClick={() => handleManualSaveSellerId(sellerId)} className={`${glassButtonPrimary} !w-auto !py-3 px-6 whitespace-nowrap`}>저장</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1082,14 +1233,92 @@ export default function App() {
         </div>
       </main>
 
+      {/* --- ⭐️ 복원됨: 상품 수정 모달 (Glassmorphism 적용) --- */}
+      {productEditModal.isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeProductEditModal}></div>
+          <div className="bg-white/90 backdrop-blur-2xl rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/50 relative z-10">
+            <div className="px-6 py-5 border-b border-white/40 flex justify-between items-center bg-white/30 shrink-0">
+              <h3 className="text-lg font-extrabold text-slate-800">상품 정보 수정</h3>
+              <button onClick={closeProductEditModal} className="text-slate-400 hover:text-slate-800 transition"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+            
+            <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">상품명</label>
+                <input type="text" value={productEditModal.name} onChange={e => setProductEditModal({...productEditModal, name: e.target.value})} className={glassInput} />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">가격</label>
+                  <input type="number" value={productEditModal.price} onChange={e => setProductEditModal({...productEditModal, price: e.target.value})} className={`${glassInput} font-mono`} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">재고 설정</label>
+                  <div className="flex items-center gap-3 bg-white/50 px-4 py-2.5 rounded-2xl border border-white/60 shadow-sm mb-2">
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer text-slate-700 font-bold">
+                      <input type="radio" name="stockType" value="unlimited" checked={productEditModal.stockType === 'unlimited'} onChange={e => setProductEditModal({...productEditModal, stockType: e.target.value, stockCount: ''})} className="accent-blue-600 w-3 h-3" /> 무제한
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer text-slate-700 font-bold">
+                      <input type="radio" name="stockType" value="limited" checked={productEditModal.stockType === 'limited'} onChange={e => setProductEditModal({...productEditModal, stockType: e.target.value})} className="accent-blue-600 w-3 h-3" /> 수량지정
+                    </label>
+                  </div>
+                  {productEditModal.stockType === 'limited' && (
+                    <input type="number" value={productEditModal.stockCount} onChange={e => setProductEditModal({...productEditModal, stockCount: e.target.value})} className={`${glassInput} font-mono bg-white/70`} placeholder="수량 입력" />
+                  )}
+                </div>
+              </div>
+              
+              <div className="bg-white/40 rounded-2xl p-5 border border-white/60 shadow-inner">
+                <h4 className="text-[10px] font-extrabold text-blue-600 uppercase tracking-widest mb-3 border-b border-white/50 pb-2 ml-1">표시 및 상태 설정</h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">진열 여부</label>
+                    <div className="flex items-center gap-4 bg-white/50 px-4 py-3 rounded-xl border border-white/60 shadow-sm">
+                      <label className="flex items-center gap-2 text-xs cursor-pointer font-bold text-slate-700">
+                        <input type="radio" name="editIsDisplayed" value="true" checked={productEditModal.isDisplayed === 'true'} onChange={e => setProductEditModal({...productEditModal, isDisplayed: e.target.value})} className="accent-blue-600 w-3.5 h-3.5" /> 진열 표시
+                      </label>
+                      <label className="flex items-center gap-2 text-xs cursor-pointer font-bold text-slate-700">
+                        <input type="radio" name="editIsDisplayed" value="false" checked={productEditModal.isDisplayed === 'false'} onChange={e => setProductEditModal({...productEditModal, isDisplayed: e.target.value})} className="accent-blue-600 w-3.5 h-3.5" /> 숨김
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">판매 상태</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white/50 px-4 py-3 rounded-xl border border-white/60 shadow-sm">
+                      {[ {l:'판매 예정', v:'scheduled'}, {l:'판매 중', v:'onSale'}, {l:'품절', v:'soldOut'}, {l:'종료', v:'completed'} ].map(s => (
+                        <label key={s.v} className="flex items-center gap-1.5 text-xs cursor-pointer font-bold text-slate-700 hover:text-blue-600 transition-colors">
+                          <input type="radio" name="editStatus" value={s.v} checked={productEditModal.status === s.v} onChange={e => setProductEditModal({...productEditModal, status: e.target.value})} className="accent-blue-600 w-3.5 h-3.5" /> {s.l}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 block ml-1">상세 설명</label>
+                <textarea value={productEditModal.description} onChange={e => setProductEditModal({...productEditModal, description: e.target.value})} className="w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl focus:bg-white focus:border-blue-400 outline-none transition-all text-sm text-slate-800 shadow-sm resize-none custom-scrollbar" rows="3"></textarea>
+              </div>
+            </div>
+            
+            <div className="px-6 py-5 border-t border-white/40 flex justify-end gap-2 bg-white/30 shrink-0">
+              <button onClick={closeProductEditModal} className={glassButtonSecondary}>취소</button>
+              <button onClick={handleUpdateProduct} className="px-6 py-2.5 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md transition font-bold">변경사항 즉시 저장</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* --- 모달들 (예약 확인, 수정) --- */}
       {isConfirmModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setIsConfirmModalOpen(false)}></div>
           <div className="bg-white/90 backdrop-blur-2xl rounded-3xl p-6 md:p-8 w-full max-w-md shadow-2xl z-10 border border-white/50">
             <h3 className="text-lg md:text-xl font-extrabold mb-4 md:mb-5 border-b border-slate-200/50 pb-2 md:pb-3 text-slate-800">예약을 등록할까요?</h3>
-            <div className="space-y-3 md:space-y-4 text-xs md:text-sm bg-white/50 p-4 md:p-5 rounded-2xl border border-white/60 mb-6 md:mb-8 shadow-inner">
-              <p className="font-medium text-slate-600 flex justify-between"><b className="text-slate-800 shrink-0">상품명</b> <span className="text-right truncate ml-4 font-bold max-w-[200px]">{products.find(p => p.id === scheduleForm.productId)?.name || scheduleForm.productId}</span></p>
+            <div className="space-y-3 md:space-y-4 text-xs md:text-sm bg-white/50 p-4 md:p-5 rounded-2xl border border-white/60 mb-6 md:mb-8 shadow-inner overflow-y-auto max-h-48 custom-scrollbar">
+              <p className="font-medium text-slate-600 flex justify-between"><b className="text-slate-800 shrink-0">대상 상품</b> <span className="text-right ml-4 font-bold">{scheduleForm.products.map(p=>p.name).join(', ')} <span className="text-[10px] text-blue-600 ml-1">({scheduleForm.products.length}건)</span></span></p>
               <p className="font-medium text-slate-600 flex justify-between"><b className="text-slate-800 shrink-0">변경 상태</b> <span className="font-bold">{translateStatus(scheduleForm.status)}</span></p>
               <p className="font-medium text-slate-600 flex justify-between"><b className="text-slate-800 shrink-0">진열 여부</b> <span className="font-bold">{scheduleForm.isDisplayed === 'true' ? '표시' : '숨김'}</span></p>
               <div className="h-px bg-slate-200/50 my-1 md:my-2"></div>
