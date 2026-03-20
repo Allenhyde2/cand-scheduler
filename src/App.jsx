@@ -83,7 +83,6 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
     onDateChange(finalDateStr);
     onTimeChange(finalTimeStr);
     
-    // ⭐️ 빈 값 오류를 방지하기 위해 선택된 데이터를 즉시 전달합니다.
     onConfirm(finalDateStr, finalTimeStr);
   };
 
@@ -536,13 +535,12 @@ export default function App() {
     setIsDatePickerOpen(true);
   };
 
-  // ⭐️ 데이터 흐름 수정 반영
   const handleConfirmDatePicker = (selectedD, selectedT) => {
     const finalDate = selectedD || pickerDate;
     const finalTime = selectedT || pickerTime;
 
     if (!finalDate || !finalTime) {
-      showToast('날짜와 시간을 모두 입력해주세요.', 'error');
+      showToast('날짜와 시간을 모두 선택해주세요.', 'error');
       return;
     }
     setConfirmedDateTime(`${finalDate}T${finalTime}`);
@@ -700,16 +698,16 @@ export default function App() {
   ];
 
   const CustomUI = () => (
-    <div className="relative z-[1000]">
+    <div className="relative z-[2000]">
       {toast.visible && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 animate-fade-in-fast z-[1000]">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 animate-fade-in-fast z-[2000]">
           <div className={`px-6 py-3.5 rounded-2xl backdrop-blur-md shadow-xl border border-white/20 text-sm font-bold text-white tracking-wide ${toast.type === 'error' ? 'bg-red-500/90' : toast.type === 'warning' ? 'bg-yellow-500/90' : 'bg-slate-800/90'}`}>
             {typeof toast.message === 'string' ? toast.message : JSON.stringify(toast.message)}
           </div>
         </div>
       )}
       {confirmDialog.visible && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[1000] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
           <div className="bg-white/90 backdrop-blur-2xl rounded-3xl shadow-2xl p-6 w-full max-w-sm border border-white/50">
             <h3 className="text-lg font-extrabold text-slate-800 mb-2">확인</h3>
             <p className="text-slate-600 mb-6 font-medium">
@@ -736,19 +734,6 @@ export default function App() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-pink-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30"></div>
         
         <CustomUI />
-        
-        <button 
-          type="button"
-          onClick={() => {
-            setIsAuthenticated(true);
-            setLoginMode('admin');
-            setSellerId('');
-            showToast('테스트 모드로 진입했습니다.', 'success');
-          }}
-          className="absolute bottom-6 right-6 px-5 py-2.5 bg-white/30 hover:bg-white/60 backdrop-blur-md border border-white/50 rounded-2xl shadow-lg transition-all z-50 font-bold text-slate-600 flex items-center gap-2"
-        >
-          🚀 Bypass (UI Test)
-        </button>
 
         <div className="max-w-md w-full relative z-10">
           <div className="bg-white/40 backdrop-blur-2xl border border-white/60 rounded-[2.5rem] shadow-[0_8px_32px_0_rgba(31,38,135,0.1)] overflow-hidden">
@@ -1007,12 +992,12 @@ export default function App() {
 
                     <button type="submit" className={`mt-2 ${glassButtonPrimary} relative z-10`}>예약 정보 클라우드 전송</button>
                   </form>
-                  
-                  {/* ⭐️ 달력 모듈: 바디 최상단 보장, 모달 상단(top-8) 위치, 아이콘 기준(right-20) 배치 */}
+
+                  {/* ⭐️ 달력 모듈: 바디 최상단 렌더링. Y축은 모달 최상단에서 살짝 아래(top-10), X축은 아이콘 좌측 정렬(right-20) */}
                   {isDatePickerOpen && (
                     <>
                       <div className="fixed inset-0 z-[900]" onClick={() => setIsDatePickerOpen(false)}></div>
-                      <div className="absolute top-8 right-20 z-[1000]">
+                      <div className="absolute top-10 right-20 z-[1000]">
                         <GlassDateTimePicker 
                           date={pickerDate} 
                           time={pickerTime} 
@@ -1142,7 +1127,7 @@ export default function App() {
               <button onClick={handleConfirmEdit} className="px-5 py-2 md:px-6 md:py-2.5 text-white bg-blue-600 hover:bg-blue-700 rounded-xl font-bold shadow-md transition-all text-sm md:text-base">수정 저장</button>
             </div>
 
-            {/* ⭐️ 달력 모듈 롤백: 수정 모달에서도 top-12, right-12 위치에 팝업 */}
+            {/* ⭐️ 달력 모듈: 수정 모달에서도 동일하게 Y축은 모달 기준 약간 위쪽(top-12), X축은 우측 여백(right-12) 할당 */}
             {editModal.isDatePickerOpen && (
               <>
                 <div className="fixed inset-0 z-[900]" onClick={() => setEditModal({...editModal, isDatePickerOpen: false})}></div>
@@ -1167,6 +1152,7 @@ export default function App() {
         </div>
       )}
       
+      {/* 부드러운 페이드 인 효과 추가 */}
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
