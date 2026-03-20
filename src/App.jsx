@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const DEFAULT_GROUP_ID = 'G00O7NKV9M';
+const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
-const SCOPES = 'email poll option vote addresses';
+const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member:MOIM:product:read member:MOIM:product:write';
 
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
