@@ -748,14 +748,22 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+                
+                {/* ⭐️ 삭제되었던 마이크로 인터랙션 완벽 복원 (빛 효과, 화살표 바운스, 그라데이션 시프트) */}
                 <div className="space-y-3">
-                  <button type="submit" disabled={isLoginProcessing} className="relative w-full py-3.5 sm:py-4 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 text-white font-extrabold rounded-2xl shadow-lg transition-all disabled:opacity-50">
+                  <button type="submit" disabled={isLoginProcessing} className="relative w-full py-3.5 sm:py-4 mt-1 sm:mt-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-[length:200%_auto] hover:bg-right text-white font-extrabold rounded-2xl shadow-[0_8px_20px_-6px_rgba(99,102,241,0.6)] hover:shadow-[0_12px_25px_-6px_rgba(99,102,241,0.8)] transition-all duration-500 active:scale-[0.98] flex items-center justify-center gap-2 overflow-hidden group disabled:opacity-50 disabled:pointer-events-none">
+                    <div className="absolute inset-0 -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
                     {isLoginProcessing ? (
-                      <span className="flex items-center justify-center gap-2">
+                      <span className="flex items-center justify-center gap-2 relative z-10">
                         <svg className="w-5 h-5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                         인증 처리 중...
                       </span>
-                    ) : '시작하기'}
+                    ) : (
+                      <span className="flex items-center justify-center gap-2 relative z-10">
+                        시작하기
+                        <svg className="w-5 h-5 group-hover:translate-x-1.5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6"></path></svg>
+                      </span>
+                    )}
                   </button>
                 </div>
               </form>
