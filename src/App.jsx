@@ -181,6 +181,19 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
   );
 }
 
+// ⭐️ [기능 추가] 현재 시각을 한국 시각(KST) ISO 문자열 형식(YYYY-MM-DDTHH:mm)으로 반환하는 함수
+const getCurrentLocalISOString = () => {
+  const d = new Date();
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  const kst = new Date(utc + (9 * 60 * 60 * 1000));
+  const y = kst.getFullYear();
+  const m = String(kst.getMonth() + 1).padStart(2, '0');
+  const day = String(kst.getDate()).padStart(2, '0');
+  const h = String(kst.getHours()).padStart(2, '0');
+  const min = String(kst.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${day}T${h}:${min}`;
+};
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
@@ -210,9 +223,10 @@ export default function App() {
   const [isProductSelectOpen, setIsProductSelectOpen] = useState(false);
   const [recentProducts, setRecentProducts] = useState([]);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  const [pickerDate, setPickerDate] = useState('');
-  const [pickerTime, setPickerTime] = useState('');
-  const [confirmedDateTime, setConfirmedDateTime] = useState('');
+  // ⭐️ [수정] 빈 문자열 대신 한국 현재 시각으로 초기화
+  const [pickerDate, setPickerDate] = useState(getCurrentLocalISOString().split('T')[0]);
+  const [pickerTime, setPickerTime] = useState(getCurrentLocalISOString().split('T')[1]);
+  const [confirmedDateTime, setConfirmedDateTime] = useState(getCurrentLocalISOString());
   const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
   const [editModal, setEditModal] = useState({
     isOpen: false, task: null, status: '', isDisplayed: 'true', date: '', time: '', isDatePickerOpen: false
@@ -285,6 +299,16 @@ export default function App() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // ⭐️ [추가] 상태 예약 변경(schedule) 탭에 들어올 때마다 현재 시각으로 자동 갱신
+  useEffect(() => {
+    if (activeTab === 'schedule') {
+      const kstNow = getCurrentLocalISOString();
+      setConfirmedDateTime(kstNow);
+      setPickerDate(kstNow.split('T')[0]);
+      setPickerTime(kstNow.split('T')[1]);
+    }
+  }, [activeTab]);
 
   useEffect(() => {
     if (isAuthenticated) return;
@@ -563,7 +587,7 @@ export default function App() {
   const closeProductEditModal = () => setProductEditModal(prev => ({ ...prev, isOpen: false }));
 
   const handleUpdateProduct = async () => {
-    const { id, name, price, stockType, stockCount, isDisplayed, status, description } = productEditModal;
+    const { id, name, price, stockType, stockCount, isDisplayed, status, description, originalProduct } = productEditModal;
     const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
     
     // ⭐️ 전체 데이터를 보내면 API 검증(Validation)에 걸려 400 에러가 발생할 수 있습니다.
@@ -579,6 +603,13 @@ export default function App() {
     } else {
       updateData.name = name; updateData.price = Number(price); updateData.stockCount = finalStockCount; 
       updateData.status = status; updateData.isDisplayed = isDisplayed === 'true'; updateData.description = description;
+    }
+
+    // ⭐️ [핵심 버그 수정] Joi 검증 에러(ValidationError) 완벽 방지
+    // 백엔드 API에서 description이 빈 문자열("")인 것을 허용하지 않으므로,
+    // 공백이거나 빈 문자열일 경우 페이로드에서 아예 제외시켜 에러를 방지합니다.
+    if (typeof updateData.description === 'string' && updateData.description.trim() === '') {
+      delete updateData.description;
     }
 
     // 변경된 값이 없다면 API 호출 생략
@@ -604,7 +635,7 @@ export default function App() {
       closeProductEditModal();
       showToast('상품이 성공적으로 수정되었습니다.', 'success');
     } catch (err) {
-      showToast('상품 수정에 실패했습니다.', 'error');
+      showToast(`상품 수정 실패: ${err.message}`, 'error');
     }
   };
 
@@ -673,7 +704,11 @@ export default function App() {
         });
       }));
       setTasks(prev => [...newTasks, ...prev]);
-      setConfirmedDateTime(''); setPickerDate(''); setPickerTime('');
+      
+      // ⭐️ [수정] 전송 완료 후 폼을 비울 때 빈 값이 아니라 다시 최신 현재 시각으로 리셋
+      const kstNow = getCurrentLocalISOString();
+      setConfirmedDateTime(kstNow); setPickerDate(kstNow.split('T')[0]); setPickerTime(kstNow.split('T')[1]);
+      
       setScheduleForm({ ...scheduleForm, products: [] });
       showToast(`${scheduleForm.products.length}건의 상품 예약이 전송되었습니다!`, 'success');
     } catch (err) { showToast('예약 전송 중 오류가 발생했습니다.', 'error'); }
