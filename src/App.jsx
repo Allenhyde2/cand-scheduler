@@ -202,7 +202,7 @@ export default function App() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [productEditModal, setProductEditModal] = useState({
-    isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: '', _original: null
+    isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: '', originalProduct: null
   });
 
   const [scheduleForm, setScheduleForm] = useState({ products: [], status: 'onSale', isDisplayed: 'true' });
@@ -227,6 +227,7 @@ export default function App() {
   const navRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ top: 0, height: 0, opacity: 0 });
 
+  // ⭐️ [수정완료] 작업 히스토리 상태 및 호출 함수를 올바른 위치(컴포넌트 내부)에 선언
   const [historyLogs, setHistoryLogs] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -329,6 +330,7 @@ export default function App() {
         }
       };
 
+      // ⭐️ S3 배포 환경을 위해 절대 경로(BACKEND_API_URL) 적용 완료
       let res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=users/me`, fetchOptions);
       if (!res.ok) res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=me`, fetchOptions);
       if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
@@ -381,6 +383,7 @@ export default function App() {
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
           
+          // ⭐️ S3 배포 환경을 위해 절대 경로(BACKEND_API_URL) 적용 완료
           const res = await fetch(`${BACKEND_API_URL}/api/token`, {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ client_id: CLIENT_ID, code: code, code_verifier: codeVerifier, redirect_uri: redirectUri })
@@ -523,6 +526,7 @@ export default function App() {
       }
       if (filters.display !== 'all') params.append('isDisplayed', filters.display);
       
+      // ⭐️ S3 배포 환경을 위해 절대 경로(BACKEND_API_URL) 적용 완료
       const url = `${BACKEND_API_URL}/api/proxy?${params.toString()}`;
       
       const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken) });
@@ -546,69 +550,61 @@ export default function App() {
   const loadMoreProducts = () => { fetchProductsWithArgs(token, sellerId, loginMode, true); };
   const fetchProducts = () => { fetchProductsWithArgs(token, sellerId, loginMode, false); };
 
-  // ⭐️ [변경됨] 수정 전 '원본 데이터'를 _original 키에 저장합니다.
   const openProductEditModal = (p) => {
     setProductEditModal({
       isOpen: true, id: p.id, name: p.name || '', price: p.price || 0,
       stockType: p.stockCount === null || p.stockCount === undefined ? 'unlimited' : 'limited',
       stockCount: p.stockCount || '', isDisplayed: p.isDisplayed !== false ? 'true' : 'false',
-      status: p.status || 'onSale', description: p.description || '', 
-      _original: p
+      status: p.status || 'onSale', description: p.description || '',
+      originalProduct: p // ⭐️ 원본 데이터를 보관하여 변경된 필드만 추출합니다.
     });
   };
 
   const closeProductEditModal = () => setProductEditModal(prev => ({ ...prev, isOpen: false }));
 
-  // ⭐️ [변경됨] 원본과 비교하여 '수정된 필드'만 포함된 부분 페이로드(Delta Payload)를 전송합니다.
   const handleUpdateProduct = async () => {
-    const { id, name, price, stockType, stockCount, isDisplayed, status, description, _original } = productEditModal;
-    
+    const { id, name, price, stockType, stockCount, isDisplayed, status, description } = productEditModal;
     const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
-    const isDisplayedBool = isDisplayed === 'true';
-
-    const payload = {};
-
-    if (_original) {
-      if (name !== (_original.name || '')) payload.name = name;
-      if (Number(price) !== (_original.price || 0)) payload.price = Number(price);
-      
-      const originalStockCount = _original.stockCount == null ? null : _original.stockCount;
-      if (finalStockCount !== originalStockCount) payload.stockCount = finalStockCount;
-      
-      if (status !== (_original.status || 'onSale')) payload.status = status;
-      if (isDisplayedBool !== (_original.isDisplayed !== false)) payload.isDisplayed = isDisplayedBool;
-      if (description !== (_original.description || '')) payload.description = description;
+    
+    // ⭐️ 전체 데이터를 보내면 API 검증(Validation)에 걸려 400 에러가 발생할 수 있습니다.
+    // ⭐️ 따라서 기존 원본(originalProduct)과 비교하여 '변경된 필드'만 담아 전송합니다.
+    const updateData = {};
+    if (originalProduct) {
+      if (name !== (originalProduct.name || '')) updateData.name = name;
+      if (Number(price) !== (originalProduct.price || 0)) updateData.price = Number(price);
+      if (finalStockCount !== (originalProduct.stockCount === undefined ? null : originalProduct.stockCount)) updateData.stockCount = finalStockCount;
+      if (status !== (originalProduct.status || 'onSale')) updateData.status = status;
+      if ((isDisplayed === 'true') !== (originalProduct.isDisplayed !== false)) updateData.isDisplayed = isDisplayed === 'true';
+      if (description !== (originalProduct.description || '')) updateData.description = description;
     } else {
-      payload.name = name; payload.price = Number(price); payload.stockCount = finalStockCount;
-      payload.status = status; payload.isDisplayed = isDisplayedBool; payload.description = description;
+      updateData.name = name; updateData.price = Number(price); updateData.stockCount = finalStockCount; 
+      updateData.status = status; updateData.isDisplayed = isDisplayed === 'true'; updateData.description = description;
     }
 
-    if (Object.keys(payload).length === 0) {
+    // 변경된 값이 없다면 API 호출 생략
+    if (Object.keys(updateData).length === 0) {
       closeProductEditModal();
-      return; // 변경 사항이 없으면 바로 닫음
+      return; 
     }
 
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
-      // ID에 특수문자(: 등)가 있을 수 있으므로 encodeURIComponent 처리
+      // ⭐️ S3 배포 환경을 위해 절대 경로 적용 및 안전한 URL 인코딩(encodeURIComponent) 추가
       const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=products/${encodeURIComponent(id)}`, {
-        method: 'PUT', headers: getAuthHeaders(token), body: JSON.stringify(payload)
+        method: 'PUT', headers: getAuthHeaders(token), body: JSON.stringify(updateData)
       });
       
       if (!res.ok) {
-        let errMessage = `오류 코드: ${res.status}`;
-        try {
-          const errData = await res.json();
-          errMessage = errData.message || errData.error || JSON.stringify(errData);
-        } catch(e) { }
-        throw new Error(errMessage);
+        const errData = await res.json().catch(() => ({}));
+        console.error("수정 실패 응답:", errData);
+        throw new Error(errData.message || errData.error || `오류 코드: ${res.status}`);
       }
       
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...payload } : p));
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updateData } : p));
       closeProductEditModal();
       showToast('상품이 성공적으로 수정되었습니다.', 'success');
     } catch (err) {
-      showToast(`수정 실패: ${err.message}`, 'error');
+      showToast('상품 수정에 실패했습니다.', 'error');
     }
   };
 
@@ -1012,14 +1008,54 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-2 mt-3 p-2 border border-white/60 rounded-xl bg-white/30 min-h-[40px]">
-                        {scheduleForm.products.map(prod => (
-                          <div key={prod.id} className="flex items-center bg-white border border-white/80 shadow-sm text-slate-700 px-2.5 py-1.5 rounded-xl text-xs font-bold">
-                            <span className="mr-2 truncate max-w-[100px]">{prod.name}</span>
-                            <button type="button" onClick={() => handleRemoveProduct(prod.id)} className="text-red-400 hover:text-red-600">×</button>
+
+                      {/* ⭐️ 글래스몰피즘 디자인이 완벽히 적용된 선택 상품 데이터 테이블 */}
+                      {scheduleForm.products.length > 0 && (
+                        <div className="mt-3 border border-white/50 rounded-2xl bg-white/30 backdrop-blur-md overflow-hidden shadow-inner relative group">
+                          <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
+                            <table className="w-full text-left text-xs whitespace-nowrap">
+                              <thead className="bg-white/40 backdrop-blur-md border-b border-white/50 sticky top-0 z-10">
+                                <tr>
+                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">대상 상품</th>
+                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">상태</th>
+                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">진열</th>
+                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">관리</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-white/30">
+                                {scheduleForm.products.map(prod => (
+                                  <tr key={prod.id} className="hover:bg-white/40 transition-colors">
+                                    <td className="px-4 py-3 max-w-[140px] sm:max-w-[200px] truncate">
+                                      <p className="font-extrabold text-slate-700 truncate" title={prod.name}>{prod.name}</p>
+                                      <p className="text-[9px] text-slate-400 font-mono mt-0.5">{prod.id}</p>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/50 shadow-sm border border-white/60 text-slate-600 inline-block">
+                                        {translateStatus(prod.status)}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/50 shadow-sm border border-white/60 text-slate-600 inline-block">
+                                        {prod.isDisplayed !== false ? '표시' : '숨김'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                      <button 
+                                        type="button" 
+                                        onClick={() => handleRemoveProduct(prod.id)} 
+                                        className="w-7 h-7 mx-auto flex items-center justify-center rounded-xl bg-white/50 border border-white/60 text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm active:scale-95"
+                                        title="목록에서 제거"
+                                      >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
                           </div>
-                        ))}
-                      </div>
+                        </div>
+                      )}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-[50]">
                       <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">2. 변경 상태</label><GlassSelect value={scheduleForm.status} options={statusOptions} onChange={val => setScheduleForm({...scheduleForm, status: val})} /></div>
