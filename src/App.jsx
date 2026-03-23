@@ -6,6 +6,9 @@ const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazona
 const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
 const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member:MOIM:product:read member:MOIM:product:write';
 
+// ⭐️ 백엔드(Vercel 서버리스 함수) 절대 경로 설정 (S3 배포용)
+const BACKEND_API_URL = 'https://cand-scheduler.vercel.app';
+
 const createCodeVerifier = () => btoa(String.fromCharCode(...new Uint8Array(crypto.getRandomValues(new Uint8Array(32))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest("SHA-256", (new TextEncoder()).encode(verifier))))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 
@@ -199,7 +202,7 @@ export default function App() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [productEditModal, setProductEditModal] = useState({
-    isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: ''
+    isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: '', _original: null
   });
 
   const [scheduleForm, setScheduleForm] = useState({ products: [], status: 'onSale', isDisplayed: 'true' });
@@ -224,7 +227,6 @@ export default function App() {
   const navRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ top: 0, height: 0, opacity: 0 });
 
-  // ⭐️ [수정완료] 파일 최상단 허공에 있던 훅과 함수를 App 컴포넌트 내부로 올바르게 이동했습니다.
   const [historyLogs, setHistoryLogs] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -235,7 +237,6 @@ export default function App() {
   });
 
   const fetchHistoryLogs = async (currentToken) => {
-    if (currentToken === 'demo-token') return;
     setIsLoadingHistory(true);
     try {
       const res = await fetch(SCHEDULER_API_URL, {
@@ -269,7 +270,7 @@ export default function App() {
     };
     
     updateIndicator();
-    const timer = setTimeout(updateIndicator, 50); // DOM 렌더링 후 재조정
+    const timer = setTimeout(updateIndicator, 50); 
     window.addEventListener('resize', updateIndicator);
     
     return () => {
@@ -328,15 +329,15 @@ export default function App() {
         }
       };
 
-      let res = await fetch(`/api/proxy?endpoint=users/me`, fetchOptions);
-      if (!res.ok) res = await fetch(`/api/proxy?endpoint=me`, fetchOptions);
+      let res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=users/me`, fetchOptions);
+      if (!res.ok) res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=me`, fetchOptions);
       if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
       
       const data = await res.json();
       let sellerProfileId = data.profiles?.find(p => p.profileId && p.profileId.startsWith('CS:'))?.profileId;
       
       if (!sellerProfileId && data.id) {
-        const bulkRes = await fetch(`/api/proxy?endpoint=users/bulk`, {
+        const bulkRes = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=users/bulk`, {
           method: 'POST', headers: fetchOptions.headers, body: JSON.stringify({ ids: [data.id] })
         });
         if (bulkRes.ok) {
@@ -379,12 +380,15 @@ export default function App() {
 
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
-          const res = await fetch('/api/token', {
+          
+          const res = await fetch(`${BACKEND_API_URL}/api/token`, {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ client_id: CLIENT_ID, code: code, code_verifier: codeVerifier, redirect_uri: redirectUri })
           });
+          
           const data = await res.json();
           if (!res.ok) throw new Error(data.error_description || data.error || '토큰 발급 실패');
+          
           const accessToken = data.access_token;
           let finalSellerId = '';
           if (savedLoginMode === 'admin') {
@@ -394,6 +398,7 @@ export default function App() {
             if (autoId) { finalSellerId = autoId; } 
             else { showToast('셀러 ID 자동 탐지에 실패했습니다. 시스템 관리자에게 문의하세요.', 'warning'); }
           }
+          
           setToken(accessToken);
           setSellerId(finalSellerId);
           setLoginMode(savedLoginMode);
@@ -401,6 +406,7 @@ export default function App() {
           localStorage.setItem('cand_token', accessToken);
           localStorage.setItem('cand_seller_id', finalSellerId);
           localStorage.setItem('cand_login_mode', savedLoginMode);
+          
           fetchProductsWithArgs(accessToken, finalSellerId, savedLoginMode, false);
           fetchScheduledTasks(accessToken);
           showToast('캔패스 로그인이 완료되었습니다.', 'success');
@@ -418,6 +424,7 @@ export default function App() {
         const savedSellerId = localStorage.getItem('cand_seller_id');
         const savedMode = localStorage.getItem('cand_login_mode') || 'seller';
         const savedRecentProducts = localStorage.getItem('cand_recent_products');
+        
         if (savedToken) {
           setToken(savedToken);
           setSellerId(savedSellerId || '');
@@ -515,7 +522,9 @@ export default function App() {
         filters.status.forEach(s => params.append('status', s));
       }
       if (filters.display !== 'all') params.append('isDisplayed', filters.display);
-      const url = `/api/proxy?${params.toString()}`;
+      
+      const url = `${BACKEND_API_URL}/api/proxy?${params.toString()}`;
+      
       const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken) });
       const responseText = await res.text();
       if (!res.ok) throw new Error(`API 오류: ${res.status}`);
@@ -537,32 +546,69 @@ export default function App() {
   const loadMoreProducts = () => { fetchProductsWithArgs(token, sellerId, loginMode, true); };
   const fetchProducts = () => { fetchProductsWithArgs(token, sellerId, loginMode, false); };
 
+  // ⭐️ [변경됨] 수정 전 '원본 데이터'를 _original 키에 저장합니다.
   const openProductEditModal = (p) => {
     setProductEditModal({
       isOpen: true, id: p.id, name: p.name || '', price: p.price || 0,
       stockType: p.stockCount === null || p.stockCount === undefined ? 'unlimited' : 'limited',
       stockCount: p.stockCount || '', isDisplayed: p.isDisplayed !== false ? 'true' : 'false',
-      status: p.status || 'onSale', description: p.description || ''
+      status: p.status || 'onSale', description: p.description || '', 
+      _original: p
     });
   };
 
   const closeProductEditModal = () => setProductEditModal(prev => ({ ...prev, isOpen: false }));
 
+  // ⭐️ [변경됨] 원본과 비교하여 '수정된 필드'만 포함된 부분 페이로드(Delta Payload)를 전송합니다.
   const handleUpdateProduct = async () => {
-    const { id, name, price, stockType, stockCount, isDisplayed, status, description } = productEditModal;
+    const { id, name, price, stockType, stockCount, isDisplayed, status, description, _original } = productEditModal;
+    
     const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
-    const updateData = { name, price: Number(price), stockCount: finalStockCount, status, description, isDisplayed: isDisplayed === 'true' };
+    const isDisplayedBool = isDisplayed === 'true';
+
+    const payload = {};
+
+    if (_original) {
+      if (name !== (_original.name || '')) payload.name = name;
+      if (Number(price) !== (_original.price || 0)) payload.price = Number(price);
+      
+      const originalStockCount = _original.stockCount == null ? null : _original.stockCount;
+      if (finalStockCount !== originalStockCount) payload.stockCount = finalStockCount;
+      
+      if (status !== (_original.status || 'onSale')) payload.status = status;
+      if (isDisplayedBool !== (_original.isDisplayed !== false)) payload.isDisplayed = isDisplayedBool;
+      if (description !== (_original.description || '')) payload.description = description;
+    } else {
+      payload.name = name; payload.price = Number(price); payload.stockCount = finalStockCount;
+      payload.status = status; payload.isDisplayed = isDisplayedBool; payload.description = description;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      closeProductEditModal();
+      return; // 변경 사항이 없으면 바로 닫음
+    }
+
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
-      const res = await fetch(`/api/proxy?endpoint=products/${id}`, {
-        method: 'PUT', headers: getAuthHeaders(token), body: JSON.stringify(updateData)
+      // ID에 특수문자(: 등)가 있을 수 있으므로 encodeURIComponent 처리
+      const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=products/${encodeURIComponent(id)}`, {
+        method: 'PUT', headers: getAuthHeaders(token), body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error();
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updateData } : p));
+      
+      if (!res.ok) {
+        let errMessage = `오류 코드: ${res.status}`;
+        try {
+          const errData = await res.json();
+          errMessage = errData.message || errData.error || JSON.stringify(errData);
+        } catch(e) { }
+        throw new Error(errMessage);
+      }
+      
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...payload } : p));
       closeProductEditModal();
       showToast('상품이 성공적으로 수정되었습니다.', 'success');
     } catch (err) {
-      showToast('상품 수정에 실패했습니다.', 'error');
+      showToast(`수정 실패: ${err.message}`, 'error');
     }
   };
 
@@ -617,7 +663,7 @@ export default function App() {
           method: 'POST',
           headers: getAuthHeaders(token),
           body: JSON.stringify({
-            action: 'CREATE', taskId: newTaskId, productId: prod.id,
+            action: 'CREATE', taskId: newTaskId, productId: prod.id, productName: prod.name,
             newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
             executeAt: new Date(confirmedDateTime).toISOString(), token, communityId
           })
@@ -862,7 +908,7 @@ export default function App() {
           <header className={`${glassPanel} p-3 md:p-4 px-4 md:px-6 flex items-center justify-between shrink-0 min-h-[4rem] md:h-20 relative z-30`}>
             <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="shrink-0 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center bg-white/50 hover:bg-white rounded-xl shadow-sm text-slate-600 transition-all">≡</button>
-              <h2 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight truncate">{activeTab === 'productList' ? '상품 보드' : activeTab === 'schedule' ? '상태 예약 변경' : '환경 설정'}</h2>
+              <h2 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight truncate">{activeTab === 'productList' ? '상품 보드' : activeTab === 'schedule' ? '상태 예약 변경' : activeTab === 'history' ? '작업 처리 내역' : '환경 설정'}</h2>
             </div>
             <div className="flex items-center gap-2">
               <span className="bg-white/60 border border-white/50 text-[10px] md:text-xs font-bold px-3 md:px-4 py-1.5 md:py-2.5 rounded-xl shadow-sm text-slate-600 truncate max-w-[120px]">ID: {sellerId || '미설정'}</span>
@@ -939,7 +985,7 @@ export default function App() {
 
             {activeTab === 'schedule' && (
               <div className="flex flex-col gap-4 h-full overflow-y-auto custom-scrollbar pb-4 pr-1 relative">
-                {/* ⭐️ 예약 생성기 전체 패널 컨테이너 (여기가 top-0의 기준이 됩니다) */}
+                {/* ⭐️ 예약 생성기 전체 패널 컨테이너 */}
                 <div className={`shrink-0 ${glassPanel} p-5 md:p-6 flex flex-col relative z-20`}>
                   <h3 className="font-extrabold text-base md:text-lg text-slate-800 mb-6">예약 생성기</h3>
                   <form onSubmit={handlePreSubmit} className="space-y-4">
@@ -1035,7 +1081,7 @@ export default function App() {
               </div>
             )}
 
-            {/* 👇 여기서부터 추가 (히스토리 화면 UI) 👇 */}
+            {/* 👇 히스토리 화면 UI 👇 */}
             {activeTab === 'history' && (
               <div className={`${glassPanel} flex flex-col h-full overflow-hidden`}>
                 <div className="p-4 md:p-6 border-b border-white/40 flex justify-between items-center shrink-0">
@@ -1075,7 +1121,6 @@ export default function App() {
                 </div>
               </div>
             )}
-            {/* 👆 여기까지 추가 👆 */}
 
             {activeTab === 'settings' && (
               <div className="max-w-2xl mx-auto h-full w-full">
