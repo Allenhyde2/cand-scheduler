@@ -1,7 +1,16 @@
 // Vercel Serverless Function: CORS 에러를 우회하기 위한 프록시 서버입니다.
 
 export default async function handler(req, res) {
-  // 클라이언트에서 넘겨준 endpoint 파라미터 (예: 'products', 'users/bulk' 등)
+  // ⭐️ CORS 허용 설정 (403 및 Preflight 에러 완벽 방지)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-can-community-id, x-can-profile-id');
+
+  // OPTIONS preflight 요청 시 즉시 200 반환
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   const { endpoint, ...queryParams } = req.query;
 
   if (!endpoint) {
@@ -11,46 +20,42 @@ export default async function handler(req, res) {
   // 실제 요청을 보낼 목적지 URL 조립 (https://api.cand.xyz/products)
   const targetUrl = new URL(`https://api.cand.xyz/${endpoint}`);
 
-  // 넘어온 나머지 쿼리 파라미터(예: limit=100)를 목적지 URL에 붙여줍니다.
   Object.keys(queryParams).forEach(key => {
     targetUrl.searchParams.append(key, queryParams[key]);
   });
 
   try {
-    // 프론트엔드에서 보낸 인증 헤더(토큰, 커뮤니티 ID)를 그대로 본섭으로 전달합니다.
     const headers = {
       'Content-Type': 'application/json',
     };
     
+    // 프론트엔드에서 보낸 인증 헤더들을 그대로 본섭으로 전달
     if (req.headers.authorization) headers['Authorization'] = req.headers.authorization;
     if (req.headers['x-can-community-id']) headers['x-can-community-id'] = req.headers['x-can-community-id'];
+    
+    // ⭐️ [중요] 403 에러 방지: 프로필(셀러) 식별을 위한 권한 헤더 추가 전달
+    if (req.headers['x-can-profile-id']) headers['x-can-profile-id'] = req.headers['x-can-profile-id'];
 
     console.log(`프록시 요청 전송 [${req.method}]: ${targetUrl.toString()}`);
 
-    // fetch 호출을 위한 옵션 객체 조립
     const fetchOptions = {
       method: req.method,
       headers: headers,
     };
 
-    // ⭐️ 핵심 수정: POST 요청 등에서 프론트가 보낸 req.body (예: { ids: [...] })가 있다면, 
-    // 이를 문자열(JSON)로 변환하여 캔패스 본섭으로 고스란히 토스합니다.
     if (req.method !== 'GET' && req.method !== 'HEAD' && req.body) {
       fetchOptions.body = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     }
 
-    // 서버 대 서버로 실제 API를 호출합니다 (CORS 무시)
+    // 서버 대 서버로 실제 API를 호출합니다
     const response = await fetch(targetUrl.toString(), fetchOptions);
-
     const data = await response.json();
 
-    // 캔패스 본섭에서 에러를 뱉었을 경우
     if (!response.ok) {
       console.error('프록시 본섭 응답 에러:', data);
       return res.status(response.status).json(data);
     }
 
-    // 성공적으로 데이터를 받아오면 프론트엔드(App.jsx)로 돌려줍니다.
     return res.status(200).json(data);
 
   } catch (error) {
