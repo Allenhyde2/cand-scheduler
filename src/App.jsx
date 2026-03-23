@@ -45,6 +45,32 @@ const GlobalStyles = () => (
   `}} />
 );
 
+// ⭐️ [추가] 작업 히스토리 상태 및 호출 함수
+  const [historyLogs, setHistoryLogs] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const fetchHistoryLogs = async (currentToken) => {
+    if (currentToken === 'demo-token') return;
+    setIsLoadingHistory(true);
+    try {
+      // AWS 스케줄러 API에 action: 'HISTORY'를 요청하여 로그를 받아옵니다.
+      const res = await fetch(SCHEDULER_API_URL, {
+        method: 'POST',
+        headers: getAuthHeaders(currentToken),
+        body: JSON.stringify({ action: 'HISTORY', token: currentToken, communityId }) 
+      });
+      if (!res.ok) throw new Error(`히스토리 로드 실패: ${res.status}`);
+      
+      const data = await res.json();
+      // 백엔드에서 { logs: [ { productName, success: true, message, executedAt }, ... ] } 형태로 응답한다고 가정
+      setHistoryLogs(data.logs || []);
+    } catch (err) {
+      console.error('히스토리 내역 조회 에러:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
 // --- 커스텀 글래스몰피즘 Select 드랍다운 ---
 function GlassSelect({ value, options, onChange, placeholder = "선택해주세요" }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -804,6 +830,18 @@ export default function App() {
             >
               상태 예약 변경
             </button>
+            <div className="px-2 pt-6 pb-1"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Logs</span></div>
+            <button 
+              data-active={activeTab === 'history'} 
+              onClick={() => {
+                setActiveTab('history'); 
+                fetchHistoryLogs(token); // 탭 클릭 시 히스토리 API 호출
+                if(window.innerWidth < 768) setIsSidebarOpen(false);
+              }} 
+              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 ${activeTab === 'history' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
+            >
+              실행 결과 로그 (History)
+            </button>
             
             <div className="px-2 pt-6 pb-1"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System</span></div>
             <button 
@@ -998,6 +1036,48 @@ export default function App() {
                 </div>
               </div>
             )}
+
+            {/* 👇 여기서부터 추가 (히스토리 화면 UI) 👇 */}
+            {activeTab === 'history' && (
+              <div className={`${glassPanel} flex flex-col h-full overflow-hidden`}>
+                <div className="p-4 md:p-6 border-b border-white/40 flex justify-between items-center shrink-0">
+                  <h3 className="font-extrabold text-base md:text-lg text-slate-700">스케줄러 실행 결과 로그</h3>
+                  <button onClick={() => fetchHistoryLogs(token)} disabled={isLoadingHistory} className={glassButtonSecondary}>
+                    {isLoadingHistory ? '불러오는 중...' : '새로고침'}
+                  </button>
+                </div>
+                
+                <div className="flex-1 overflow-auto custom-scrollbar p-4 md:p-6 space-y-3">
+                  {isLoadingHistory ? (
+                    <div className="py-20 text-center text-slate-400 font-bold">AWS 서버에서 로그를 불러오는 중입니다...</div>
+                  ) : historyLogs.length === 0 ? (
+                    <div className="py-20 text-center text-slate-400 font-bold">기록된 작업 실행 내역이 없습니다.</div>
+                  ) : (
+                    historyLogs.map((log, idx) => (
+                      <div key={idx} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/80 transition-all">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            {/* 성공 여부에 따른 UI 분기 */}
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold text-white shadow-sm ${log.success ? 'bg-green-500' : 'bg-red-500'}`}>
+                              {log.success ? '성공' : '에러'}
+                            </span>
+                            <span className="font-extrabold text-sm md:text-base text-slate-800">{log.productName || '알 수 없는 상품'}</span>
+                          </div>
+                          <p className="text-[10px] text-slate-500 font-mono">
+                            {log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}
+                          </p>
+                        </div>
+                        
+                        <div className="text-xs text-slate-600 bg-white/60 px-3 py-2 rounded-xl border border-white/50 shadow-inner max-w-md w-full md:w-auto break-words">
+                          {log.message || (log.success ? '예약된 상태 변경이 정상적으로 완료되었습니다.' : '알 수 없는 AWS 측 오류가 발생했습니다.')}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+            {/* 👆 여기까지 추가 👆 */}
 
             {activeTab === 'settings' && (
               <div className="max-w-2xl mx-auto h-full w-full">
