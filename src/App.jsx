@@ -606,6 +606,16 @@ export default function App() {
       delete payload.description; // 빈 문자열 전송 시 발생하는 Joi 검증 에러 방지
     }
 
+    // ⭐️ [버그 수정 3] Joi Validation 통과를 위한 이미지 객체 -> 문자열 변환
+    // GET 요청 시 객체 배열로 오던 데이터를 서버가 요구하는 문자열(URL) 배열로 안전하게 치환합니다.
+    if (payload.images) {
+      const extractUrlString = (img) => typeof img === 'string' ? img : (img?.url || '');
+      payload.images = {
+        mobile: Array.isArray(payload.images.mobile) ? payload.images.mobile.map(extractUrlString).filter(Boolean) : [],
+        web: Array.isArray(payload.images.web) ? payload.images.web.map(extractUrlString).filter(Boolean) : []
+      };
+    }
+
     // ⭐️ [중요] 응답에만 포함되고 요청 시 보내면 에러가 나는 읽기 전용 필드들을 청소합니다.
     const readOnlyFields = ['id', 'createdAt', 'updatedAt', 'soldCount', 'soldAmount', 'buyersCount', 'currency', 'deliveryType', 'parentSellerId', 'userId', 'productVariants', 'accountIds'];
     readOnlyFields.forEach(field => delete payload[field]);
