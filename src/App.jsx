@@ -589,36 +589,58 @@ export default function App() {
       return;
     }
 
-    // ⭐️ [버그 수정 2] REST API의 PUT 규칙(전체 덮어쓰기)을 완벽하게 준수합니다.
-    // API 문서를 보면 PUT 요청 시 blocks(콘텐츠)가 "Required(필수)"로 지정되어 있습니다.
-    // 따라서 기존 데이터(_original)를 모두 가져오고, 우리가 수정한 필드만 그 위에 덮어씌웁니다.
-    const payload = { ..._original };
-    
-    payload.name = name;
-    payload.price = Number(price);
-    payload.stockCount = stockType === 'unlimited' ? null : Number(stockCount);
-    payload.status = status;
-    payload.isDisplayed = isDisplayed === 'true';
+    // ⭐️ [완벽 해결] REST API PUT 스펙에 맞춰 "허용된 필드"만 명시적으로 구성합니다.
+    // _original 전체를 복사하면 sellerId, type 등 수정 불가능한 보호된 필드까지 
+    // 전송되어 400(FORBIDDEN) 에러가 발생합니다.
+    const payload = {
+      name: name,
+      price: Number(price),
+      status: status,
+      isDisplayed: isDisplayed === 'true',
+      blocks: _original.blocks || [],
+    };
+
+    if (stockType === 'limited') {
+      payload.stockCount = Number(stockCount);
+    } else {
+      payload.stockCount = null;
+    }
 
     if (description && description.trim() !== '') {
       payload.description = description;
-    } else {
-      delete payload.description; // 빈 문자열 전송 시 발생하는 Joi 검증 에러 방지
     }
 
-    // ⭐️ [버그 수정 3] Joi Validation 통과를 위한 이미지 객체 -> 문자열 변환
-    // GET 요청 시 객체 배열로 오던 데이터를 서버가 요구하는 문자열(URL) 배열로 안전하게 치환합니다.
-    if (payload.images) {
+    // API 스펙 상 허용된 선택적 필드들만 안전하게 복사
+    const allowedOptionalFields = [
+      'categoryIds', 'deliveryGroupId', 'deliveryPolicies', 'details',
+      'hsCode', 'normalPrice', 'originalPrice', 'primaryDetails',
+      'returnReplacementPolicy', 'shippingFee', 'sku', 'supplyPrice', 'weight'
+    ];
+
+    allowedOptionalFields.forEach(field => {
+      if (_original[field] !== undefined && _original[field] !== null) {
+        payload[field] = _original[field];
+      }
+    });
+
+    // ⭐️ [견고한 이미지 파싱] 백엔드가 배열로 주든, 객체로 주든 완벽히 매핑합니다.
+    if (_original.images) {
       const extractUrlString = (img) => typeof img === 'string' ? img : (img?.url || '');
-      payload.images = {
-        mobile: Array.isArray(payload.images.mobile) ? payload.images.mobile.map(extractUrlString).filter(Boolean) : [],
-        web: Array.isArray(payload.images.web) ? payload.images.web.map(extractUrlString).filter(Boolean) : []
-      };
+      
+      if (Array.isArray(_original.images)) {
+        payload.images = {
+          mobile: _original.images.map(extractUrlString).filter(Boolean),
+          web: []
+        };
+      } else {
+        payload.images = {
+          mobile: Array.isArray(_original.images.mobile) ? _original.images.mobile.map(extractUrlString).filter(Boolean) : [],
+          web: Array.isArray(_original.images.web) ? _original.images.web.map(extractUrlString).filter(Boolean) : []
+        };
+      }
+    } else {
+      payload.images = { mobile: [], web: [] };
     }
-
-    // ⭐️ [중요] 응답에만 포함되고 요청 시 보내면 에러가 나는 읽기 전용 필드들을 청소합니다.
-    const readOnlyFields = ['id', 'createdAt', 'updatedAt', 'soldCount', 'soldAmount', 'buyersCount', 'currency', 'deliveryType', 'parentSellerId', 'userId', 'productVariants', 'accountIds'];
-    readOnlyFields.forEach(field => delete payload[field]);
 
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
@@ -626,9 +648,15 @@ export default function App() {
       const endpointPath = `products/${encodeURIComponent(id)}`;
       const url = `${BACKEND_API_URL}/api/proxy?endpoint=${endpointPath}`;
 
+      const requestHeaders = getAuthHeaders(token);
+      // ⭐️ 권한 헤더 추가 (판매자/어드민으로서의 권한 증명)
+      if (sellerId) {
+        requestHeaders['x-can-profile-id'] = sellerId;
+      }
+
       const res = await fetch(url, {
         method: 'PUT', 
-        headers: getAuthHeaders(token), // 불필요한 x-can-profile-id 강제 삽입 제거 (워커와 동일한 100% 순수 헤더)
+        headers: requestHeaders, 
         body: JSON.stringify(payload)
       });
       
