@@ -620,9 +620,24 @@ export default function App() {
 
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
-      // ⭐️ S3 배포 환경을 위해 절대 경로 적용 및 안전한 URL 인코딩(encodeURIComponent) 추가
-      const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=products/${encodeURIComponent(id)}`, {
-        method: 'PUT', headers: getAuthHeaders(token), body: JSON.stringify(updateData)
+      
+      // ⭐️ [수정] 403 권한 에러(Forbidden) 방지: URL에 프로필/셀러 ID 명시
+      const updateParams = new URLSearchParams();
+      updateParams.append('endpoint', `products/${id}`);
+      if (sellerId) {
+        updateParams.append('profileId', sellerId);
+        updateParams.append('sellerId', sellerId);
+      }
+
+      // ⭐️ [수정] 본인이 소유자임을 서버에 확실히 알리기 위해 프로필 전용 헤더를 추가 삽입
+      const requestHeaders = getAuthHeaders(token);
+      if (sellerId) {
+        requestHeaders['x-can-profile-id'] = sellerId;
+      }
+
+      // 절대 경로 프록시 및 권한 헤더를 적용하여 전송
+      const res = await fetch(`${BACKEND_API_URL}/api/proxy?${updateParams.toString()}`, {
+        method: 'PUT', headers: requestHeaders, body: JSON.stringify(updateData)
       });
       
       if (!res.ok) {
