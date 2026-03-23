@@ -45,32 +45,6 @@ const GlobalStyles = () => (
   `}} />
 );
 
-// ⭐️ [추가] 작업 히스토리 상태 및 호출 함수
-  const [historyLogs, setHistoryLogs] = useState([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-
-  const fetchHistoryLogs = async (currentToken) => {
-    if (currentToken === 'demo-token') return;
-    setIsLoadingHistory(true);
-    try {
-      // AWS 스케줄러 API에 action: 'HISTORY'를 요청하여 로그를 받아옵니다.
-      const res = await fetch(SCHEDULER_API_URL, {
-        method: 'POST',
-        headers: getAuthHeaders(currentToken),
-        body: JSON.stringify({ action: 'HISTORY', token: currentToken, communityId }) 
-      });
-      if (!res.ok) throw new Error(`히스토리 로드 실패: ${res.status}`);
-      
-      const data = await res.json();
-      // 백엔드에서 { logs: [ { productName, success: true, message, executedAt }, ... ] } 형태로 응답한다고 가정
-      setHistoryLogs(data.logs || []);
-    } catch (err) {
-      console.error('히스토리 내역 조회 에러:', err);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
 // --- 커스텀 글래스몰피즘 Select 드랍다운 ---
 function GlassSelect({ value, options, onChange, placeholder = "선택해주세요" }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -250,6 +224,36 @@ export default function App() {
   const navRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ top: 0, height: 0, opacity: 0 });
 
+  // ⭐️ [수정완료] 파일 최상단 허공에 있던 훅과 함수를 App 컴포넌트 내부로 올바르게 이동했습니다.
+  const [historyLogs, setHistoryLogs] = useState([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const getAuthHeaders = (currentToken) => ({
+    'content-type': 'application/json',
+    'authorization': `Bearer ${currentToken || token}`,
+    'x-can-community-id': communityId,
+  });
+
+  const fetchHistoryLogs = async (currentToken) => {
+    if (currentToken === 'demo-token') return;
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(SCHEDULER_API_URL, {
+        method: 'POST',
+        headers: getAuthHeaders(currentToken),
+        body: JSON.stringify({ action: 'HISTORY', token: currentToken, communityId }) 
+      });
+      if (!res.ok) throw new Error(`히스토리 로드 실패: ${res.status}`);
+      
+      const data = await res.json();
+      setHistoryLogs(data.logs || []);
+    } catch (err) {
+      console.error('히스토리 내역 조회 에러:', err);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
   useEffect(() => {
     const updateIndicator = () => {
       if (navRef.current) {
@@ -312,12 +316,6 @@ export default function App() {
   const closeConfirm = () => {
     setConfirmDialog({ visible: false, message: '', onConfirm: null });
   };
-
-  const getAuthHeaders = (currentToken) => ({
-    'content-type': 'application/json',
-    'authorization': `Bearer ${currentToken || token}`,
-    'x-can-community-id': communityId,
-  });
 
   const autoFetchSellerId = async (accessToken) => {
     try {
