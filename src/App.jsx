@@ -181,7 +181,7 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
   );
 }
 
-// ⭐️ [기능 추가] 현재 시각을 한국 시각(KST) ISO 문자열 형식(YYYY-MM-DDTHH:mm)으로 반환하는 함수
+// ⭐️ 현재 시각을 한국 시각(KST) ISO 문자열 형식으로 반환하는 함수
 const getCurrentLocalISOString = () => {
   const d = new Date();
   const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
@@ -351,8 +351,9 @@ export default function App() {
         }
       };
 
-      let res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=users/me`, fetchOptions);
-      if (!res.ok) res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=me`, fetchOptions);
+      // ⭐️ [버그 수정 1] API 문서에 존재하지 않는 '/users/me' 경로를 제거하고,
+      // 공식 엔드포인트인 '/me' 만 정확하게 호출하여 초기 403 에러를 차단합니다.
+      const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=me`, fetchOptions);
       if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
       
       const data = await res.json();
@@ -583,49 +584,41 @@ export default function App() {
   const handleUpdateProduct = async () => {
     const { id, name, price, stockType, stockCount, isDisplayed, status, description, _original } = productEditModal;
     
-    const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
-    const isDisplayedBool = isDisplayed === 'true';
+    if (!_original) {
+      showToast('원본 상품 데이터를 찾을 수 없어 수정할 수 없습니다.', 'error');
+      return;
+    }
 
-    const payload = {};
+    // ⭐️ [버그 수정 2] REST API의 PUT 규칙(전체 덮어쓰기)을 완벽하게 준수합니다.
+    // API 문서를 보면 PUT 요청 시 blocks(콘텐츠)가 "Required(필수)"로 지정되어 있습니다.
+    // 따라서 기존 데이터(_original)를 모두 가져오고, 우리가 수정한 필드만 그 위에 덮어씌웁니다.
+    const payload = { ..._original };
+    
+    payload.name = name;
+    payload.price = Number(price);
+    payload.stockCount = stockType === 'unlimited' ? null : Number(stockCount);
+    payload.status = status;
+    payload.isDisplayed = isDisplayed === 'true';
 
-    if (_original) {
-      if (name !== (_original.name || '')) payload.name = name;
-      if (Number(price) !== (_original.price || 0)) payload.price = Number(price);
-      
-      const originalStockCount = _original.stockCount == null ? null : _original.stockCount;
-      if (finalStockCount !== originalStockCount) payload.stockCount = finalStockCount;
-      
-      if (status !== (_original.status || 'onSale')) payload.status = status;
-      if (isDisplayedBool !== (_original.isDisplayed !== false)) payload.isDisplayed = isDisplayedBool;
-      if (description !== (_original.description || '')) payload.description = description;
+    if (description && description.trim() !== '') {
+      payload.description = description;
     } else {
-      payload.name = name; payload.price = Number(price); payload.stockCount = finalStockCount;
-      payload.status = status; payload.isDisplayed = isDisplayedBool; payload.description = description;
+      delete payload.description; // 빈 문자열 전송 시 발생하는 Joi 검증 에러 방지
     }
 
-    if (typeof payload.description === 'string' && payload.description.trim() === '') {
-      delete payload.description;
-    }
-
-    if (Object.keys(payload).length === 0) {
-      closeProductEditModal();
-      return; 
-    }
+    // ⭐️ [중요] 응답에만 포함되고 요청 시 보내면 에러가 나는 읽기 전용 필드들을 청소합니다.
+    const readOnlyFields = ['id', 'createdAt', 'updatedAt', 'soldCount', 'soldAmount', 'buyersCount', 'currency', 'deliveryType', 'parentSellerId', 'userId', 'productVariants', 'accountIds'];
+    readOnlyFields.forEach(field => delete payload[field]);
 
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
       
-      // ⭐️ [핵심 해결] Lambda 워커와 100% 동일하게 통신합니다.
-      // 본섭 API의 보안 거부(403) 및 쿼리 에러(400)를 유발하던 profileId, sellerId를 
-      // URL, Headers, Payload에서 모두 깨끗하게 제거했습니다.
       const endpointPath = `products/${encodeURIComponent(id)}`;
       const url = `${BACKEND_API_URL}/api/proxy?endpoint=${endpointPath}`;
 
-      const requestHeaders = getAuthHeaders(token);
-
       const res = await fetch(url, {
         method: 'PUT', 
-        headers: requestHeaders, 
+        headers: getAuthHeaders(token), // 불필요한 x-can-profile-id 강제 삽입 제거 (워커와 동일한 100% 순수 헤더)
         body: JSON.stringify(payload)
       });
       
