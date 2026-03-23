@@ -215,7 +215,7 @@ export default function App() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const [productEditModal, setProductEditModal] = useState({
-    isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: '', originalProduct: null
+    isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: '', _original: null
   });
 
   const [scheduleForm, setScheduleForm] = useState({ products: [], status: 'onSale', isDisplayed: 'true' });
@@ -223,7 +223,6 @@ export default function App() {
   const [isProductSelectOpen, setIsProductSelectOpen] = useState(false);
   const [recentProducts, setRecentProducts] = useState([]);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-  // ⭐️ [수정] 빈 문자열 대신 한국 현재 시각으로 초기화
   const [pickerDate, setPickerDate] = useState(getCurrentLocalISOString().split('T')[0]);
   const [pickerTime, setPickerTime] = useState(getCurrentLocalISOString().split('T')[1]);
   const [confirmedDateTime, setConfirmedDateTime] = useState(getCurrentLocalISOString());
@@ -241,7 +240,6 @@ export default function App() {
   const navRef = useRef(null);
   const [indicatorStyle, setIndicatorStyle] = useState({ top: 0, height: 0, opacity: 0 });
 
-  // ⭐️ [수정완료] 작업 히스토리 상태 및 호출 함수를 올바른 위치(컴포넌트 내부)에 선언
   const [historyLogs, setHistoryLogs] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -300,7 +298,6 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // ⭐️ [추가] 상태 예약 변경(schedule) 탭에 들어올 때마다 현재 시각으로 자동 갱신
   useEffect(() => {
     if (activeTab === 'schedule') {
       const kstNow = getCurrentLocalISOString();
@@ -354,7 +351,6 @@ export default function App() {
         }
       };
 
-      // ⭐️ S3 배포 환경을 위해 절대 경로(BACKEND_API_URL) 적용 완료
       let res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=users/me`, fetchOptions);
       if (!res.ok) res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=me`, fetchOptions);
       if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
@@ -407,7 +403,6 @@ export default function App() {
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
           
-          // ⭐️ S3 배포 환경을 위해 절대 경로(BACKEND_API_URL) 적용 완료
           const res = await fetch(`${BACKEND_API_URL}/api/token`, {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ client_id: CLIENT_ID, code: code, code_verifier: codeVerifier, redirect_uri: redirectUri })
@@ -550,7 +545,6 @@ export default function App() {
       }
       if (filters.display !== 'all') params.append('isDisplayed', filters.display);
       
-      // ⭐️ S3 배포 환경을 위해 절대 경로(BACKEND_API_URL) 적용 완료
       const url = `${BACKEND_API_URL}/api/proxy?${params.toString()}`;
       
       const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken) });
@@ -580,40 +574,40 @@ export default function App() {
       stockType: p.stockCount === null || p.stockCount === undefined ? 'unlimited' : 'limited',
       stockCount: p.stockCount || '', isDisplayed: p.isDisplayed !== false ? 'true' : 'false',
       status: p.status || 'onSale', description: p.description || '',
-      originalProduct: p // ⭐️ 원본 데이터를 보관하여 변경된 필드만 추출합니다.
+      _original: p 
     });
   };
 
   const closeProductEditModal = () => setProductEditModal(prev => ({ ...prev, isOpen: false }));
 
   const handleUpdateProduct = async () => {
-    const { id, name, price, stockType, stockCount, isDisplayed, status, description, originalProduct } = productEditModal;
-    const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
+    const { id, name, price, stockType, stockCount, isDisplayed, status, description, _original } = productEditModal;
     
-    // ⭐️ 전체 데이터를 보내면 API 검증(Validation)에 걸려 400 에러가 발생할 수 있습니다.
-    // ⭐️ 따라서 기존 원본(originalProduct)과 비교하여 '변경된 필드'만 담아 전송합니다.
-    const updateData = {};
-    if (originalProduct) {
-      if (name !== (originalProduct.name || '')) updateData.name = name;
-      if (Number(price) !== (originalProduct.price || 0)) updateData.price = Number(price);
-      if (finalStockCount !== (originalProduct.stockCount === undefined ? null : originalProduct.stockCount)) updateData.stockCount = finalStockCount;
-      if (status !== (originalProduct.status || 'onSale')) updateData.status = status;
-      if ((isDisplayed === 'true') !== (originalProduct.isDisplayed !== false)) updateData.isDisplayed = isDisplayed === 'true';
-      if (description !== (originalProduct.description || '')) updateData.description = description;
+    const finalStockCount = stockType === 'unlimited' ? null : Number(stockCount);
+    const isDisplayedBool = isDisplayed === 'true';
+
+    const payload = {};
+
+    if (_original) {
+      if (name !== (_original.name || '')) payload.name = name;
+      if (Number(price) !== (_original.price || 0)) payload.price = Number(price);
+      
+      const originalStockCount = _original.stockCount == null ? null : _original.stockCount;
+      if (finalStockCount !== originalStockCount) payload.stockCount = finalStockCount;
+      
+      if (status !== (_original.status || 'onSale')) payload.status = status;
+      if (isDisplayedBool !== (_original.isDisplayed !== false)) payload.isDisplayed = isDisplayedBool;
+      if (description !== (_original.description || '')) payload.description = description;
     } else {
-      updateData.name = name; updateData.price = Number(price); updateData.stockCount = finalStockCount; 
-      updateData.status = status; updateData.isDisplayed = isDisplayed === 'true'; updateData.description = description;
+      payload.name = name; payload.price = Number(price); payload.stockCount = finalStockCount;
+      payload.status = status; payload.isDisplayed = isDisplayedBool; payload.description = description;
     }
 
-    // ⭐️ [핵심 버그 수정] Joi 검증 에러(ValidationError) 완벽 방지
-    // 백엔드 API에서 description이 빈 문자열("")인 것을 허용하지 않으므로,
-    // 공백이거나 빈 문자열일 경우 페이로드에서 아예 제외시켜 에러를 방지합니다.
-    if (typeof updateData.description === 'string' && updateData.description.trim() === '') {
-      delete updateData.description;
+    if (typeof payload.description === 'string' && payload.description.trim() === '') {
+      delete payload.description;
     }
 
-    // 변경된 값이 없다면 API 호출 생략
-    if (Object.keys(updateData).length === 0) {
+    if (Object.keys(payload).length === 0) {
       closeProductEditModal();
       return; 
     }
@@ -621,36 +615,34 @@ export default function App() {
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
       
-      // ⭐️ [수정] 403 권한 에러(Forbidden) 방지: URL에 프로필/셀러 ID 명시
-      const updateParams = new URLSearchParams();
-      updateParams.append('endpoint', `products/${id}`);
-      if (sellerId) {
-        updateParams.append('profileId', sellerId);
-        updateParams.append('sellerId', sellerId);
-      }
+      // ⭐️ [핵심 해결] Lambda 워커와 100% 동일하게 통신합니다.
+      // 본섭 API의 보안 거부(403) 및 쿼리 에러(400)를 유발하던 profileId, sellerId를 
+      // URL, Headers, Payload에서 모두 깨끗하게 제거했습니다.
+      const endpointPath = `products/${encodeURIComponent(id)}`;
+      const url = `${BACKEND_API_URL}/api/proxy?endpoint=${endpointPath}`;
 
-      // ⭐️ [수정] 본인이 소유자임을 서버에 확실히 알리기 위해 프로필 전용 헤더를 추가 삽입
       const requestHeaders = getAuthHeaders(token);
-      if (sellerId) {
-        requestHeaders['x-can-profile-id'] = sellerId;
-      }
 
-      // 절대 경로 프록시 및 권한 헤더를 적용하여 전송
-      const res = await fetch(`${BACKEND_API_URL}/api/proxy?${updateParams.toString()}`, {
-        method: 'PUT', headers: requestHeaders, body: JSON.stringify(updateData)
+      const res = await fetch(url, {
+        method: 'PUT', 
+        headers: requestHeaders, 
+        body: JSON.stringify(payload)
       });
       
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        console.error("수정 실패 응답:", errData);
-        throw new Error(errData.message || errData.error || `오류 코드: ${res.status}`);
+        let errMessage = `오류 코드: ${res.status}`;
+        try {
+          const errData = await res.json();
+          errMessage = errData.message || errData.error || errData.code || JSON.stringify(errData);
+        } catch(e) { }
+        throw new Error(errMessage);
       }
       
-      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...updateData } : p));
+      setProducts(prev => prev.map(p => p.id === id ? { ...p, ...payload } : p));
       closeProductEditModal();
       showToast('상품이 성공적으로 수정되었습니다.', 'success');
     } catch (err) {
-      showToast(`상품 수정 실패: ${err.message}`, 'error');
+      showToast(`수정 실패: ${err.message}`, 'error');
     }
   };
 
@@ -720,7 +712,6 @@ export default function App() {
       }));
       setTasks(prev => [...newTasks, ...prev]);
       
-      // ⭐️ [수정] 전송 완료 후 폼을 비울 때 빈 값이 아니라 다시 최신 현재 시각으로 리셋
       const kstNow = getCurrentLocalISOString();
       setConfirmedDateTime(kstNow); setPickerDate(kstNow.split('T')[0]); setPickerTime(kstNow.split('T')[1]);
       
@@ -925,7 +916,7 @@ export default function App() {
               data-active={activeTab === 'history'} 
               onClick={() => {
                 setActiveTab('history'); 
-                fetchHistoryLogs(token); // 탭 클릭 시 히스토리 API 호출
+                fetchHistoryLogs(token); 
                 if(window.innerWidth < 768) setIsSidebarOpen(false);
               }} 
               className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 ${activeTab === 'history' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
@@ -1125,10 +1116,6 @@ export default function App() {
                   {isDatePickerOpen && (
                     <>
                       <div className="fixed inset-0 z-[900]" onClick={() => setIsDatePickerOpen(false)}></div>
-                      {/* Z 포지션: z-[1000] (가장 위로 띄움)
-                        Y 포지션: top-16 (예약 생성기 박스 상단(어퍼보더) 기준 4rem 아래)
-                        X 포지션: right-8 md:right-20 (우측 테두리 기준 모바일 2rem, PC 5rem 떨어짐)
-                      */}
                       <div className="absolute top-16 right-8 md:right-20 z-[1000]">
                         <GlassDateTimePicker 
                           date={pickerDate} 
