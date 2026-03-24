@@ -201,7 +201,7 @@ export default function App() {
   const [token, setToken] = useState('');
   const [communityId] = useState(DEFAULT_GROUP_ID);
   const [sellerId, setSellerId] = useState('');
-  const [loginMode, setLoginMode] = useState('seller'); 
+  const [loginMode, setLoginMode] = useState(() => localStorage.getItem('cand_login_mode') || sessionStorage.getItem('cand_login_mode') || 'seller');
   const [activeTab, setActiveTab] = useState('productList'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
   const [toast, setToast] = useState({ visible: false, message: '', type: 'info' }); 
