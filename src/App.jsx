@@ -990,7 +990,10 @@ export default function App() {
             </button>
           </nav>
 
-          <div className="p-4 border-t border-white/40 bg-white/30">
+          <div className="p-4 border-t border-white/40 bg-white/30 space-y-2">
+            <button onClick={() => setIsDebugMode(true)} className="w-full py-2 text-[10px] text-slate-400 font-mono bg-white/40 border border-slate-200/50 hover:bg-white/80 hover:text-slate-600 rounded-xl transition-all duration-300">
+              Token Debug
+            </button>
             <button onClick={handleLogout} className="w-full py-3 text-sm text-red-500 font-extrabold bg-white/80 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 rounded-2xl transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-red-500/30 active:scale-95 flex items-center justify-center gap-2 group">
               <svg className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
               로그아웃
