@@ -15,12 +15,12 @@ const createCodeChallenge = async (verifier) => btoa(String.fromCharCode(...new 
 
 // --- ⭐️ 컬러 및 상태 디자인 변수 ---
 const colorVariants = {
-  blue: 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30',
-  red: 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/30',
-  green: 'bg-green-600 hover:bg-green-700 text-white shadow-green-500/30',
-  purple: 'bg-purple-600 hover:bg-purple-700 text-white shadow-purple-500/30',
-  edit: 'bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200',
-  delete: 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
+  blue: 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 active:scale-[0.97] active:shadow-inner text-white shadow-blue-500/30',
+  red: 'bg-red-600 hover:bg-red-700 active:bg-red-800 active:scale-[0.97] active:shadow-inner text-white shadow-red-500/30',
+  green: 'bg-green-600 hover:bg-green-700 active:bg-green-800 active:scale-[0.97] active:shadow-inner text-white shadow-green-500/30',
+  purple: 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800 active:scale-[0.97] active:shadow-inner text-white shadow-purple-500/30',
+  edit: 'bg-blue-50 hover:bg-blue-100 active:bg-blue-200 active:scale-[0.97] active:shadow-inner text-blue-600 border border-blue-200',
+  delete: 'bg-red-50 hover:bg-red-100 active:bg-red-200 active:scale-[0.97] active:shadow-inner text-red-600 border border-red-200'
 };
 
 // ⭐️ Vite 기본 CSS(너비 제한) 강제 무력화 및 공통 스타일 (분리형 컴포넌트)
@@ -68,7 +68,7 @@ function GlassSelect({ value, options, onChange, placeholder = "선택해주세�
     <div className="relative w-full" ref={ref}>
       <div 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl cursor-pointer hover:bg-white/70 transition-all text-sm font-bold text-slate-700 shadow-sm flex justify-between items-center group"
+        className="w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl cursor-pointer hover:bg-white/70 active:bg-white/40 active:scale-[0.99] active:shadow-inner transition-all text-sm font-bold text-slate-700 shadow-sm flex justify-between items-center group"
       >
         <span>{selectedLabel}</span>
         <svg className={`w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
@@ -80,7 +80,7 @@ function GlassSelect({ value, options, onChange, placeholder = "선택해주세�
             <div 
               key={opt.value}
               onClick={() => { onChange(opt.value); setIsOpen(false); }}
-              className={`px-3 py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all ${value === opt.value ? 'bg-blue-600 text-white shadow-md' : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700'}`}
+              className={`px-3 py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all active:scale-[0.97] ${value === opt.value ? 'bg-blue-600 text-white shadow-md active:bg-blue-800' : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100'}`}
             >
               {opt.label}
             </div>
@@ -124,9 +124,9 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
   return (
     <div className="bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.3)] rounded-3xl p-6 w-[320px] max-w-[90vw] animate-fade-in-fast">
       <div className="flex justify-between items-center mb-5">
-        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg></button>
+        <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 active:bg-slate-200 active:scale-90 text-slate-600 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg></button>
         <span className="font-extrabold text-slate-800 text-sm">{currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월</span>
-        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-600 transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7"></path></svg></button>
+        <button onClick={nextMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 active:bg-slate-200 active:scale-90 text-slate-600 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 5l7 7-7 7"></path></svg></button>
       </div>
 
       <div className="grid grid-cols-7 gap-1 mb-3 text-center">
@@ -850,7 +850,7 @@ export default function App() {
   const glassPanel = "bg-white/60 backdrop-blur-xl border border-white/50 shadow-sm rounded-3xl";
   const glassInput = "w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 shadow-sm placeholder-slate-400";
   const glassButtonPrimary = `w-full py-3.5 font-bold rounded-2xl shadow-lg transition-all ${colorVariants.blue}`;
-  const glassButtonSecondary = "px-4 py-2 bg-white/60 hover:bg-white/90 border border-white/60 rounded-xl text-slate-700 font-bold shadow-sm transition-all text-sm";
+  const glassButtonSecondary = "px-4 py-2 bg-white/60 hover:bg-white/90 active:bg-white/40 active:scale-[0.97] active:shadow-inner border border-white/60 rounded-xl text-slate-700 font-bold shadow-sm transition-all text-sm";
   const statusOptions = [{ value: 'scheduled', label: '판매예정' }, { value: 'onSale', label: '판매중' }, { value: 'soldOut', label: '품절' }, { value: 'completed', label: '판매종료' }];
   const displayOptions = [{ value: 'true', label: '진열함 (표시)' }, { value: 'false', label: '진열안함 (숨김)' }];
 
@@ -933,7 +933,7 @@ export default function App() {
                         <p className="text-slate-600 text-xs font-medium leading-relaxed">관리자 권한으로 커뮤니티의 <b className="text-purple-600 font-extrabold">전체 상품 현황</b>을 통합적으로 조회하고 제어합니다.</p>
                       </div>
                       <div className="border border-white/50 bg-white/20 rounded-2xl overflow-hidden shadow-sm transition-all duration-300">
-                        <button type="button" onClick={() => setIsAdminAdvancedOpen(!isAdminAdvancedOpen)} className="w-full p-3 sm:p-4 flex items-center justify-between text-slate-700 hover:bg-white/40 transition-colors">
+                        <button type="button" onClick={() => setIsAdminAdvancedOpen(!isAdminAdvancedOpen)} className="w-full p-3 sm:p-4 flex items-center justify-between text-slate-700 hover:bg-white/40 active:bg-white/20 active:scale-[0.99] transition-all">
                           <span className="font-extrabold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2">🔍 특정 판매자 지정 조회 (선택)</span>
                           <svg className={`w-4 h-4 sm:w-5 sm:h-5 text-slate-400 transition-transform duration-300 ${isAdminAdvancedOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                         </button>
@@ -1008,14 +1008,14 @@ export default function App() {
             <button 
               data-active={activeTab === 'productList'} 
               onClick={() => {setActiveTab('productList'); if(window.innerWidth < 768) setIsSidebarOpen(false);}} 
-              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 ${activeTab === 'productList' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
+              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'productList' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
             >
               상품 현황 보드
             </button>
             <button 
               data-active={activeTab === 'schedule'} 
               onClick={() => {setActiveTab('schedule'); if(window.innerWidth < 768) setIsSidebarOpen(false);}} 
-              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 ${activeTab === 'schedule' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
+              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'schedule' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
             >
               상태 예약 변경
             </button>
@@ -1027,7 +1027,7 @@ export default function App() {
                 fetchHistoryLogs(token); 
                 if(window.innerWidth < 768) setIsSidebarOpen(false);
               }} 
-              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 ${activeTab === 'history' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
+              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'history' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
             >
               실행 결과 로그 (History)
             </button>
@@ -1036,14 +1036,14 @@ export default function App() {
             <button 
               data-active={activeTab === 'settings'} 
               onClick={() => {setActiveTab('settings'); if(window.innerWidth < 768) setIsSidebarOpen(false);}} 
-              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 ${activeTab === 'settings' ? 'text-slate-800' : 'text-slate-600 hover:bg-white/50'}`}
+              className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'settings' ? 'text-slate-800' : 'text-slate-600 hover:bg-white/50'}`}
             >
               환경 설정
             </button>
           </nav>
 
           <div className="p-4 border-t border-white/40 bg-white/30 space-y-2">
-            <button onClick={() => setIsDebugMode(true)} className="w-full py-2 text-[10px] text-slate-400 font-mono bg-white/40 border border-slate-200/50 hover:bg-white/80 hover:text-slate-600 rounded-xl transition-all duration-300">
+            <button onClick={() => setIsDebugMode(true)} className="w-full py-2 text-[10px] text-slate-400 font-mono bg-white/40 border border-slate-200/50 hover:bg-white/80 hover:text-slate-600 active:bg-white/30 active:scale-[0.97] active:shadow-inner rounded-xl transition-all duration-300">
               Token Debug
             </button>
             <button onClick={handleLogout} className="w-full py-3 text-sm text-red-500 font-extrabold bg-white/80 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 rounded-2xl transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-red-500/30 active:scale-95 flex items-center justify-center gap-2 group">
@@ -1055,7 +1055,7 @@ export default function App() {
         <main className="flex-1 flex flex-col gap-4 overflow-hidden z-10 w-full relative">
           <header className={`${glassPanel} p-3 md:p-4 px-4 md:px-6 flex items-center justify-between shrink-0 min-h-[4rem] md:h-20 relative z-30`}>
             <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
-              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="shrink-0 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center bg-white/50 hover:bg-white rounded-xl shadow-sm text-slate-600 transition-all">≡</button>
+              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="shrink-0 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center bg-white/50 hover:bg-white active:bg-white/40 active:scale-90 active:shadow-inner rounded-xl shadow-sm text-slate-600 transition-all">≡</button>
               <h2 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight truncate">{activeTab === 'productList' ? '상품 보드' : activeTab === 'schedule' ? '상태 예약 변경' : activeTab === 'history' ? '작업 처리 내역' : '환경 설정'}</h2>
             </div>
             <div className="flex items-center gap-2">
@@ -1081,7 +1081,7 @@ export default function App() {
                       <div><label className="block text-[10px] font-bold text-slate-400 mb-1">태그</label><input type="text" value={filters.tag} onChange={e => setFilters({...filters, tag: e.target.value})} className={glassInput} /></div>
                     </div>
                     <div className="mt-4 flex justify-end gap-2">
-                      <button onClick={resetFilters} className="text-xs font-bold text-slate-500 hover:text-slate-700 transition">초기화</button>
+                      <button onClick={resetFilters} className="text-xs font-bold text-slate-500 hover:text-slate-700 active:text-slate-900 active:scale-95 transition-all">초기화</button>
                       <button onClick={applyFilters} className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all ${colorVariants.blue}`}>필터 적용</button>
                     </div>
                   </div>
@@ -1119,7 +1119,7 @@ export default function App() {
                               </td>
                               <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
                               <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white shadow-sm border border-white/60">{translateStatus(p.status)}</span></td>
-                              <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white transition-all">수정</button></td>
+                              <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
                             </tr>
                           )
                         })
@@ -1136,21 +1136,21 @@ export default function App() {
                       {totalPages > 1 && (
                         <div className="flex items-center gap-1">
                           <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
-                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">«</button>
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">«</button>
                           <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
-                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">‹</button>
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">‹</button>
                           {getPageNumbers().map(n => (
                             <button key={n} onClick={() => setCurrentPage(n)}
-                              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
+                              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all active:scale-95 active:shadow-inner ${
                                 n === currentPage
-                                  ? 'bg-blue-500 text-white border-blue-400 shadow-md'
-                                  : 'bg-white/50 border-white/60 hover:bg-white/80 text-slate-600'
+                                  ? 'bg-blue-500 text-white border-blue-400 shadow-md active:bg-blue-700'
+                                  : 'bg-white/50 border-white/60 hover:bg-white/80 active:bg-white/40 text-slate-600'
                               }`}>{n}</button>
                           ))}
                           <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
-                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">›</button>
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">›</button>
                           <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
-                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">»</button>
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">»</button>
                         </div>
                       )}
                     </div>
@@ -1180,7 +1180,7 @@ export default function App() {
                         {isProductSelectOpen && (
                           <div className="absolute left-0 right-0 top-full mt-1.5 bg-white/90 backdrop-blur-2xl border border-white/60 shadow-xl rounded-2xl z-[70] max-h-56 overflow-y-auto p-2 animate-fade-in-fast">
                             {filteredProducts.map(p => (
-                              <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-blue-50 transition-all mb-1 flex justify-between items-center">
+                              <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-blue-50 active:bg-blue-100 active:scale-[0.98] transition-all mb-1 flex justify-between items-center">
                                 <span className="font-bold text-slate-700 truncate">{p.name}</span>
                                 <span className="text-[9px] text-slate-400 font-mono shrink-0">{p.id}</span>
                               </button>
@@ -1358,7 +1358,7 @@ export default function App() {
             <div className="bg-white/90 backdrop-blur-2xl rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/50 relative z-10">
               <div className="px-6 py-5 border-b border-white/40 flex justify-between items-center bg-white/30 shrink-0">
                 <h3 className="text-lg font-extrabold text-slate-800 font-sans">상품 정보 즉시 수정</h3>
-                <button onClick={closeProductEditModal} className="text-slate-400 hover:text-slate-800 transition"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                <button onClick={closeProductEditModal} className="text-slate-400 hover:text-slate-800 active:scale-90 active:text-slate-900 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg></button>
               </div>
               <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
                 <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">상품명</label><input type="text" value={productEditModal.name} onChange={e => setProductEditModal({...productEditModal, name: e.target.value})} className={glassInput} /></div>
