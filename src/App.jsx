@@ -571,33 +571,41 @@ export default function App() {
         return JSON.parse(responseText);
       };
 
-      // 1차: 첫 50개 즉시 표시
+      // 커서 반복 전체 로드 헬퍼
+      const fetchAllPages = async (extraParams) => {
+        let items = [], cursor = null;
+        do {
+          if (abortController.signal.aborted) return items;
+          const p = buildBaseParams(cursor);
+          if (extraParams) Object.entries(extraParams).forEach(([k, v]) => p.append(k, v));
+          const data = await doFetch(p);
+          if (abortController.signal.aborted) return items;
+          items = [...items, ...(data.data || [])];
+          cursor = data.paging?.after || null;
+        } while (cursor);
+        return items;
+      };
+
+      // 1차: 첫 50개 즉시 표시 (파라미터 없이)
       const firstParams = buildBaseParams(null);
       const firstData = await doFetch(firstParams);
       if (abortController.signal.aborted) return;
-      const firstList = firstData.data || [];
-      setProducts(firstList);
+      setProducts(firstData.data || []);
       setCurrentPage(1);
       setIsLoading(false);
 
-      // 2차: 나머지 백그라운드 로드
-      let cursor = firstData.paging?.after || null;
-      if (cursor) {
-        setIsLoadingMore(true);
-        let allItems = [...firstList];
-        while (cursor) {
-          if (abortController.signal.aborted) return;
-          const params = buildBaseParams(cursor);
-          const data = await doFetch(params);
-          if (abortController.signal.aborted) return;
-          const list = data.data || [];
-          allItems = [...allItems, ...list];
-          cursor = data.paging?.after || null;
-          const deduped = [...new Map(allItems.map(p => [p.id, p])).values()];
-          setProducts(deduped);
-        }
-        setIsLoadingMore(false);
-      }
+      // 2차 백그라운드: 3중 병렬 전체 로드 (진열중 + 숨김 + 필터없음)
+      setIsLoadingMore(true);
+      const [noFilter, displayed, hidden] = await Promise.all([
+        fetchAllPages(null),
+        fetchAllPages({ isDisplayed: 'true' }),
+        fetchAllPages({ isDisplayed: 'false' })
+      ]);
+      if (abortController.signal.aborted) return;
+      const merged = [...noFilter, ...displayed, ...hidden];
+      const deduped = [...new Map(merged.map(p => [p.id, p])).values()];
+      setProducts(deduped);
+      setIsLoadingMore(false);
       setPagingAfter(null);
     } catch (err) {
       if (err.name === 'AbortError') return; // 취소된 요청은 무시
@@ -1175,7 +1183,7 @@ export default function App() {
                 <div className="flex-1 overflow-auto custom-scrollbar">
                   <table className="w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-white/40 backdrop-blur-md border-b border-white/40 text-slate-500 sticky top-0 z-10">
-                      <tr><th className="px-6 py-4">상품 정보</th><th className="px-6 py-4 text-right">가격</th><th className="px-6 py-4 text-center">상태</th><th className="px-6 py-4 text-center">관리</th></tr>
+                      <tr><th className="px-6 py-4">상품 정보</th><th className="px-6 py-4 text-right">가격</th><th className="px-6 py-4 text-center">진열</th><th className="px-6 py-4 text-center">상태</th><th className="px-6 py-4 text-center">관리</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/40">
                       {(loginMode === 'seller' && !sellerId) ? (
@@ -1204,7 +1212,23 @@ export default function App() {
                                 <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
                               </td>
                               <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
-                              <td className="px-6 py-4 text-center"><span className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white shadow-sm border border-white/60">{translateStatus(p.status)}</span></td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${
+                                  p.isDisplayed
+                                    ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                                    : 'bg-slate-400/15 text-slate-500 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'
+                                }`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${
+                                  ({
+                                    scheduled: 'bg-amber-500/15 text-amber-600 border-amber-300/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]',
+                                    onSale: 'bg-blue-500/15 text-blue-600 border-blue-300/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]',
+                                    soldOut: 'bg-red-500/15 text-red-500 border-red-300/50 shadow-[0_0_8px_rgba(239,68,68,0.3)]',
+                                    completed: 'bg-slate-400/15 text-slate-400 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'
+                                  })[p.status] || 'bg-white/50 text-slate-500 border-white/60'
+                                }`}>{translateStatus(p.status)}</span>
+                              </td>
                               <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
                             </tr>
                           )
