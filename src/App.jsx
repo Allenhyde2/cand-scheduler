@@ -567,39 +567,25 @@ export default function App() {
         return JSON.parse(responseText);
       };
 
-      // 필터가 'all'이고 첫 로드일 때: 진열중 + 숨김 병렬 조회
-      if (filters.display === 'all' && !isLoadMore) {
-        const paramsDisplayed = buildBaseParams();
-        paramsDisplayed.append('isDisplayed', 'true');
-        const paramsHidden = buildBaseParams();
-        paramsHidden.append('isDisplayed', 'false');
+      // 'all': isDisplayed 파라미터 없이 전체 조회 (카테고리 미설정 상품 포함)
+      // 특정 필터: 해당 값만 조회
+      const params = buildBaseParams();
+      if (filters.display !== 'all') {
+        params.append('isDisplayed', filters.display);
+      }
+      // isDisplayed 파라미터 미전송 시 API가 전체 상품 반환
 
-        const [dataDisplayed, dataHidden] = await Promise.all([
-          doFetch(paramsDisplayed),
-          doFetch(paramsHidden)
-        ]);
-
-        const displayed = dataDisplayed.data || [];
-        const hidden = dataHidden.data || [];
-        // id 기준 중복 제거 후 합침
-        const merged = [...displayed, ...hidden];
-        const deduped = [...new Map(merged.map(p => [p.id, p])).values()];
-        setProducts(deduped);
-        // 양쪽 페이징 커서 중 존재하는 것 사용
-        setPagingAfter(dataDisplayed.paging?.after || dataHidden.paging?.after || null);
-      } else {
-        // 필터 지정 또는 loadMore: 기존 단일 조회
-        const params = buildBaseParams();
-        if (filters.display !== 'all') params.append('isDisplayed', filters.display);
-        const data = await doFetch(params);
-        const list = data.data || [];
-        if (isLoadMore) setProducts(prev => {
+      const data = await doFetch(params);
+      const list = data.data || [];
+      if (isLoadMore) {
+        setProducts(prev => {
           const merged = [...prev, ...list];
           return [...new Map(merged.map(p => [p.id, p])).values()];
         });
-        else setProducts(list);
-        setPagingAfter(data.paging?.after || null);
+      } else {
+        setProducts(list);
       }
+      setPagingAfter(data.paging?.after || null);
     } catch (err) {
       showToast('목록 로드 실패: ' + err.message, 'error');
     } finally {
