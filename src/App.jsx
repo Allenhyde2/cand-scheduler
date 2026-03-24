@@ -215,6 +215,8 @@ export default function App() {
   const [filters, setFilters] = useState({ name: '', sku: '', tag: '', status: [], display: 'all' });
   const [pagingAfter, setPagingAfter] = useState(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
 
   const [productEditModal, setProductEditModal] = useState({
     isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: '', _original: null
@@ -532,21 +534,20 @@ export default function App() {
     }
   };
 
-  const fetchProductsWithArgs = async (currentToken, currentSellerId, currentMode, isLoadMore = false) => {
+  const fetchProductsWithArgs = async (currentToken, currentSellerId, currentMode) => {
     if (currentMode === 'seller' && !currentSellerId) return;
-    if (isLoadMore) setIsLoadingMore(true);
-    else setIsLoading(true);
+    setIsLoading(true);
     try {
       const activeToken = currentToken || token;
       if (!activeToken) throw new Error("유효한 토큰이 없습니다.");
 
       // 공통 파라미터 빌드 (isDisplayed 제외)
-      const buildBaseParams = () => {
+      const buildBaseParams = (cursor) => {
         const p = new URLSearchParams();
         p.append('endpoint', 'products');
         p.append('limit', '50');
         p.append('order', 'DESC');
-        if (isLoadMore && pagingAfter) p.append('after', pagingAfter);
+        if (cursor) p.append('after', cursor);
         if (filters.name) p.append('query', filters.name);
         if (filters.sku) p.append('sku', filters.sku);
         if (filters.tag) p.append('tag', filters.tag);
@@ -554,6 +555,9 @@ export default function App() {
         if (searchSellerId) p.append('sellerId', searchSellerId);
         if (filters.status.length > 0) {
           filters.status.forEach(s => p.append('status', s));
+        }
+        if (filters.display !== 'all') {
+          p.append('isDisplayed', filters.display);
         }
         return p;
       };
@@ -567,25 +571,22 @@ export default function App() {
         return JSON.parse(responseText);
       };
 
-      // 'all': isDisplayed 파라미터 없이 전체 조회 (카테고리 미설정 상품 포함)
-      // 특정 필터: 해당 값만 조회
-      const params = buildBaseParams();
-      if (filters.display !== 'all') {
-        params.append('isDisplayed', filters.display);
-      }
-      // isDisplayed 파라미터 미전송 시 API가 전체 상품 반환
+      // 자동 전체 로드: 커서가 있는 한 반복 fetch
+      let allItems = [];
+      let cursor = null;
+      do {
+        const params = buildBaseParams(cursor);
+        const data = await doFetch(params);
+        const list = data.data || [];
+        allItems = [...allItems, ...list];
+        cursor = data.paging?.after || null;
+      } while (cursor);
 
-      const data = await doFetch(params);
-      const list = data.data || [];
-      if (isLoadMore) {
-        setProducts(prev => {
-          const merged = [...prev, ...list];
-          return [...new Map(merged.map(p => [p.id, p])).values()];
-        });
-      } else {
-        setProducts(list);
-      }
-      setPagingAfter(data.paging?.after || null);
+      // 중복 제거
+      const deduped = [...new Map(allItems.map(p => [p.id, p])).values()];
+      setProducts(deduped);
+      setCurrentPage(1);
+      setPagingAfter(null);
     } catch (err) {
       showToast('목록 로드 실패: ' + err.message, 'error');
     } finally {
@@ -594,10 +595,23 @@ export default function App() {
     }
   };
 
-  const resetFilters = () => setFilters({ name: '', sku: '', tag: '', status: [], display: 'all' });
-  const applyFilters = () => { setPagingAfter(null); fetchProductsWithArgs(token, sellerId, loginMode, false); };
-  const loadMoreProducts = () => { fetchProductsWithArgs(token, sellerId, loginMode, true); };
-  const fetchProducts = () => { fetchProductsWithArgs(token, sellerId, loginMode, false); };
+  // 페이지네이션 파생 변수
+  const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE);
+  const displayedProducts = products.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
+  const getPageNumbers = () => {
+    const pages = [];
+    const start = Math.max(1, currentPage - 2);
+    const end = Math.min(totalPages, currentPage + 2);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  };
+
+  const resetFilters = () => { setFilters({ name: '', sku: '', tag: '', status: [], display: 'all' }); setCurrentPage(1); };
+  const applyFilters = () => { setPagingAfter(null); setCurrentPage(1); fetchProductsWithArgs(token, sellerId, loginMode); };
+  const fetchProducts = () => { setCurrentPage(1); fetchProductsWithArgs(token, sellerId, loginMode); };
 
   const openProductEditModal = (p) => {
     setProductEditModal({
@@ -1085,7 +1099,7 @@ export default function App() {
                       ) : products.length === 0 ? (
                         <tr><td colSpan="6" className="p-16 text-center text-slate-400 font-extrabold text-sm">조회된 상품이 없습니다.</td></tr>
                       ) : (
-                        products.map(p => {
+                        displayedProducts.map(p => {
                           const imgUrl = p.images?.mobile?.[0] || p.images?.web?.[0] || '';
                           return (
                             <tr key={p.id} className="hover:bg-white/40 transition-colors group">
@@ -1102,7 +1116,34 @@ export default function App() {
                       )}
                     </tbody>
                   </table>
-                  {pagingAfter && <button onClick={loadMoreProducts} className="w-full py-6 text-slate-400 text-xs font-bold hover:text-blue-600 transition-colors">결과 더 보기</button>}
+                  {/* 페이지네이션 */}
+                  {products.length > 0 && (
+                    <div className="bg-white/30 backdrop-blur-md border-t border-white/40 px-6 py-3 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-400 font-bold">
+                        총 {products.length}개 · {currentPage}/{totalPages} 페이지
+                      </span>
+                      {totalPages > 1 && (
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">«</button>
+                          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">‹</button>
+                          {getPageNumbers().map(n => (
+                            <button key={n} onClick={() => setCurrentPage(n)}
+                              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${
+                                n === currentPage
+                                  ? 'bg-blue-500 text-white border-blue-400 shadow-md'
+                                  : 'bg-white/50 border-white/60 hover:bg-white/80 text-slate-600'
+                              }`}>{n}</button>
+                          ))}
+                          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">›</button>
+                          <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
+                            className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 disabled:opacity-30 transition-all text-slate-500">»</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
