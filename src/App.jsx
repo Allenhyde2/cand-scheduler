@@ -581,16 +581,22 @@ export default function App() {
 
         const displayed = dataDisplayed.data || [];
         const hidden = dataHidden.data || [];
-        setProducts([...displayed, ...hidden]);
-        // 페이징은 진열중 목록 기준
-        setPagingAfter(dataDisplayed.paging?.after || null);
+        // id 기준 중복 제거 후 합침
+        const merged = [...displayed, ...hidden];
+        const deduped = [...new Map(merged.map(p => [p.id, p])).values()];
+        setProducts(deduped);
+        // 양쪽 페이징 커서 중 존재하는 것 사용
+        setPagingAfter(dataDisplayed.paging?.after || dataHidden.paging?.after || null);
       } else {
         // 필터 지정 또는 loadMore: 기존 단일 조회
         const params = buildBaseParams();
         if (filters.display !== 'all') params.append('isDisplayed', filters.display);
         const data = await doFetch(params);
         const list = data.data || [];
-        if (isLoadMore) setProducts(prev => [...prev, ...list]);
+        if (isLoadMore) setProducts(prev => {
+          const merged = [...prev, ...list];
+          return [...new Map(merged.map(p => [p.id, p])).values()];
+        });
         else setProducts(list);
         setPagingAfter(data.paging?.after || null);
       }
