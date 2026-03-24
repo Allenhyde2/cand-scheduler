@@ -618,9 +618,23 @@ export default function App() {
     }
   };
 
-  // 페이지네이션 파생 변수
-  const totalPages = Math.ceil(products.length / ITEMS_PER_PAGE);
-  const displayedProducts = products.slice(
+  // 클라이언트 사이드 필터링 + 페이지네이션
+  const filteredProducts = products.filter(p => {
+    if (filters.name && !(p.name || '').toLowerCase().includes(filters.name.toLowerCase())) return false;
+    if (filters.sku && !(p.sku || '').toLowerCase().includes(filters.sku.toLowerCase())) return false;
+    if (filters.tag) {
+      const tags = (p.tags || []).map(t => t.toLowerCase());
+      if (!tags.some(t => t.includes(filters.tag.toLowerCase()))) return false;
+    }
+    if (filters.status.length > 0 && !filters.status.includes(p.status)) return false;
+    if (filters.display !== 'all') {
+      const isDisp = filters.display === 'true';
+      if (p.isDisplayed !== isDisp) return false;
+    }
+    return true;
+  });
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const displayedProducts = filteredProducts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE
   );
@@ -633,7 +647,7 @@ export default function App() {
   };
 
   const resetFilters = () => { setFilters({ name: '', sku: '', tag: '', status: [], display: 'all' }); setCurrentPage(1); };
-  const applyFilters = () => { setPagingAfter(null); setCurrentPage(1); fetchProductsWithArgs(token, sellerId, loginMode); };
+  const applyFilters = () => { setCurrentPage(1); }; // 클라이언트 필터링 — filteredProducts가 자동 반영
   const fetchProducts = () => { setCurrentPage(1); fetchProductsWithArgs(token, sellerId, loginMode); };
 
   const openProductEditModal = (p) => {
@@ -1143,7 +1157,7 @@ export default function App() {
                   {products.length > 0 && (
                     <div className="bg-white/30 backdrop-blur-md border-t border-white/40 px-6 py-3 flex items-center justify-between">
                       <span className="text-[11px] text-slate-400 font-bold flex items-center gap-2">
-                        총 {products.length}개 · {currentPage}/{totalPages} 페이지
+                        총 {filteredProducts.length}개{filteredProducts.length !== products.length ? ` (전체 ${products.length})` : ''} · {currentPage}/{totalPages} 페이지
                         {isLoadingMore && <span className="inline-flex items-center gap-1 text-blue-500"><span className="w-3 h-3 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin"></span>로딩중...</span>}
                       </span>
                       {totalPages > 1 && (
