@@ -621,9 +621,31 @@ export default function App() {
     return true;
   });
 
-  // 상품 데이터에서 고유 서브셀러 목록 추출
+  // 상품 데이터에서 고유 서브셀러 목록 추출 + API로 이름 조회
+  const [sellerNames, setSellerNames] = useState({});
+  const sellerNamesFetchedRef = useRef(new Set());
+
+  useEffect(() => {
+    const sellerIds = [...new Set(products.filter(p => p.sellerId).map(p => p.sellerId))];
+    const unfetched = sellerIds.filter(id => !sellerNamesFetchedRef.current.has(id));
+    if (unfetched.length === 0 || !token) return;
+
+    unfetched.forEach(async (sid) => {
+      sellerNamesFetchedRef.current.add(sid);
+      try {
+        const url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`sellers/${sid}`)}`;
+        const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(token) });
+        if (res.ok) {
+          const data = await res.json();
+          const name = data?.name || data?.nickname || data?.userId || sid;
+          setSellerNames(prev => ({ ...prev, [sid]: name }));
+        }
+      } catch (e) { /* 실패 시 ID 그대로 표시 */ }
+    });
+  }, [products, token]);
+
   const uniqueSellers = [...new Map(
-    products.filter(p => p.sellerId).map(p => [p.sellerId, { id: p.sellerId, name: p.seller?.name || p.sellerId }])
+    products.filter(p => p.sellerId).map(p => [p.sellerId, { id: p.sellerId, name: sellerNames[p.sellerId] || p.seller?.name || p.sellerId }])
   ).values()];
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const displayedProducts = filteredProducts.slice(
@@ -1082,7 +1104,7 @@ export default function App() {
           </header>
           <div className="flex-1 overflow-hidden relative">
             {activeTab === 'productList' && (
-              <div className={`${glassPanel} flex flex-col h-full overflow-hidden`}>
+              <div className={`${glassPanel} flex flex-col h-full`}>
                 <div className="p-4 md:p-6 border-b border-white/40 flex justify-between items-center shrink-0">
                   <h3 className="font-extrabold text-base md:text-lg text-slate-700">판매 상품 현황</h3>
                   <div className="flex gap-2">
@@ -1091,7 +1113,7 @@ export default function App() {
                   </div>
                 </div>
                 {isFilterOpen && (
-                  <div className="bg-white/40 backdrop-blur-md border-b border-white/50 p-4 sm:p-6 shadow-inner shrink-0 z-10">
+                  <div className="bg-white/40 backdrop-blur-md border-b border-white/50 p-4 sm:p-6 shadow-inner shrink-0 z-[100] relative overflow-visible">
                     {/* 1행: 상품 이름 검색 */}
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 mb-1">상품 이름</label>
