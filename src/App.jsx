@@ -872,8 +872,6 @@ export default function App() {
 
   const translateStatus = (status) => ({ scheduled: '판매예정', onSale: '판매중', soldOut: '품절', completed: '판매종료' }[status] || status);
   const displayedTasks = tasks.filter(task => products.some(p => p.id === task.productId));
-  const filteredProducts = products.filter(p => p.name.includes(productSearchTerm) || p.id.includes(productSearchTerm));
-
   const glassPanel = "bg-white/60 backdrop-blur-xl border border-white/50 shadow-sm rounded-3xl";
   const glassInput = "w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 shadow-sm placeholder-slate-400";
   const glassButtonPrimary = `w-full py-3.5 font-bold rounded-2xl shadow-lg transition-all ${colorVariants.blue}`;
