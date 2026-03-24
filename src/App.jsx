@@ -217,6 +217,7 @@ export default function App() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
+  const fetchAbortRef = useRef(null);
 
   const [productEditModal, setProductEditModal] = useState({
     isOpen: false, id: '', name: '', price: '', stockType: 'unlimited', stockCount: '', isDisplayed: 'true', status: 'onSale', description: '', _original: null
@@ -536,7 +537,14 @@ export default function App() {
 
   const fetchProductsWithArgs = async (currentToken, currentSellerId, currentMode) => {
     if (currentMode === 'seller' && !currentSellerId) return;
+
+    // 이전 진행 중인 fetch 취소
+    if (fetchAbortRef.current) fetchAbortRef.current.abort();
+    const abortController = new AbortController();
+    fetchAbortRef.current = abortController;
+
     setIsLoading(true);
+    setIsLoadingMore(false);
     try {
       const activeToken = currentToken || token;
       if (!activeToken) throw new Error("유효한 토큰이 없습니다.");
@@ -565,7 +573,7 @@ export default function App() {
       // 단일 fetch 헬퍼
       const doFetch = async (params) => {
         const url = `${BACKEND_API_URL}/api/proxy?${params.toString()}`;
-        const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken) });
+        const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken), signal: abortController.signal });
         const responseText = await res.text();
         if (!res.ok) throw new Error(`API 오류: ${res.status}`);
         return JSON.parse(responseText);
@@ -574,6 +582,7 @@ export default function App() {
       // 1차: 첫 50개 즉시 표시
       const firstParams = buildBaseParams(null);
       const firstData = await doFetch(firstParams);
+      if (abortController.signal.aborted) return;
       const firstList = firstData.data || [];
       setProducts(firstList);
       setCurrentPage(1);
@@ -585,12 +594,13 @@ export default function App() {
         setIsLoadingMore(true);
         let allItems = [...firstList];
         while (cursor) {
+          if (abortController.signal.aborted) return;
           const params = buildBaseParams(cursor);
           const data = await doFetch(params);
+          if (abortController.signal.aborted) return;
           const list = data.data || [];
           allItems = [...allItems, ...list];
           cursor = data.paging?.after || null;
-          // 매 페이지마다 UI 업데이트
           const deduped = [...new Map(allItems.map(p => [p.id, p])).values()];
           setProducts(deduped);
         }
@@ -598,10 +608,13 @@ export default function App() {
       }
       setPagingAfter(null);
     } catch (err) {
+      if (err.name === 'AbortError') return; // 취소된 요청은 무시
       showToast('목록 로드 실패: ' + err.message, 'error');
     } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
+      if (!abortController.signal.aborted) {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+      }
     }
   };
 
@@ -1070,7 +1083,7 @@ export default function App() {
                   <h3 className="font-extrabold text-base md:text-lg text-slate-700">판매 상품 현황</h3>
                   <div className="flex gap-2">
                     <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={glassButtonSecondary}>상세 필터</button>
-                    <button onClick={applyFilters} disabled={isLoading} className={glassButtonSecondary}>새로고침</button>
+                    <button onClick={fetchProducts} disabled={isLoading} className={glassButtonSecondary}>{isLoading ? '로딩중...' : '새로고침'}</button>
                   </div>
                 </div>
                 {isFilterOpen && (
