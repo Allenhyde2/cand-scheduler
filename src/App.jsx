@@ -949,7 +949,7 @@ export default function App() {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <button type="submit" disabled={isLoginProcessing} className="relative w-full py-3.5 sm:py-4 mt-1 sm:mt-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-[length:200%_auto] hover:bg-right text-white font-extrabold rounded-2xl shadow-[0_8px_20px_-6px_rgba(99,102,241,0.6)] hover:shadow-[0_12px_25px_-6px_rgba(99,102,241,0.8)] transition-all duration-500 active:scale-[0.98] flex items-center justify-center gap-2 overflow-hidden group disabled:opacity-50 disabled:pointer-events-none">
+                  <button type="submit" disabled={isLoginProcessing} className="relative w-full py-3.5 sm:py-4 mt-1 sm:mt-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-[length:200%_auto] hover:bg-right text-white font-extrabold rounded-2xl shadow-[0_8px_20px_-6px_rgba(99,102,241,0.6)] hover:shadow-[0_12px_25px_-6px_rgba(99,102,241,0.8)] transition-all duration-500 active:scale-[0.95] active:shadow-[0_2px_8px_-4px_rgba(99,102,241,0.6)] active:brightness-90 flex items-center justify-center gap-2 overflow-hidden group disabled:opacity-50 disabled:pointer-events-none">
                     <div className="absolute inset-0 -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"></div>
                     {isLoginProcessing ? (
                       <span className="flex items-center justify-center gap-2 relative z-10">
