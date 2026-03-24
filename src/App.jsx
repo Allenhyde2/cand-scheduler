@@ -92,13 +92,97 @@ function GlassSelect({ value, options, onChange, placeholder = "선택해주세�
 }
 
 // --- 커스텀 Date/Time Picker ---
+// --- 스크롤 휠 피커 컴포넌트 ---
+function ScrollWheelPicker({ values, selected, onChange, suffix = '' }) {
+  const containerRef = useRef(null);
+  const ITEM_HEIGHT = 40;
+  const VISIBLE_ITEMS = 5;
+  const isScrollingRef = useRef(false);
+
+  const selectedIndex = values.indexOf(selected);
+
+  useEffect(() => {
+    if (containerRef.current && !isScrollingRef.current) {
+      const idx = values.indexOf(selected);
+      if (idx >= 0) {
+        containerRef.current.scrollTop = idx * ITEM_HEIGHT;
+      }
+    }
+  }, [selected, values]);
+
+  const handleScroll = () => {
+    if (!containerRef.current) return;
+    isScrollingRef.current = true;
+    clearTimeout(containerRef.current._scrollTimer);
+    containerRef.current._scrollTimer = setTimeout(() => {
+      if (!containerRef.current) return;
+      const index = Math.round(containerRef.current.scrollTop / ITEM_HEIGHT);
+      const clamped = Math.max(0, Math.min(values.length - 1, index));
+      containerRef.current.scrollTo({ top: clamped * ITEM_HEIGHT, behavior: 'smooth' });
+      if (values[clamped] !== selected) onChange(values[clamped]);
+      isScrollingRef.current = false;
+    }, 80);
+  };
+
+  const nudge = (dir) => {
+    const idx = values.indexOf(selected);
+    const next = Math.max(0, Math.min(values.length - 1, idx + dir));
+    onChange(values[next]);
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <button type="button" onClick={() => nudge(-1)} className="w-10 h-6 flex items-center justify-center rounded-lg hover:bg-white/60 active:bg-white/40 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/></svg>
+      </button>
+      <div className="relative overflow-hidden" style={{ height: VISIBLE_ITEMS * ITEM_HEIGHT }}>
+        <div className="absolute inset-x-0 top-0 h-[40%] bg-gradient-to-b from-white/95 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-x-0 bottom-0 h-[40%] bg-gradient-to-t from-white/95 to-transparent z-10 pointer-events-none" />
+        <div className="absolute inset-x-1 z-10 pointer-events-none border-y-2 border-blue-400/30 rounded-lg bg-blue-50/30" style={{ top: 2 * ITEM_HEIGHT, height: ITEM_HEIGHT }} />
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="h-full overflow-y-auto custom-scrollbar"
+          style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+        >
+          <style dangerouslySetInnerHTML={{__html: `[data-wheel-scroll]::-webkit-scrollbar { display: none; }`}} />
+          <div style={{ height: 2 * ITEM_HEIGHT }} />
+          {values.map((v, i) => {
+            const dist = Math.abs(i - selectedIndex);
+            return (
+              <div
+                key={v}
+                onClick={() => onChange(v)}
+                style={{ height: ITEM_HEIGHT, scrollSnapAlign: 'start' }}
+                className={`flex items-center justify-center cursor-pointer select-none transition-all duration-200 ${
+                  dist === 0 ? 'text-blue-600 font-extrabold text-lg scale-110' :
+                  dist === 1 ? 'text-slate-500 font-bold text-sm opacity-60' :
+                  'text-slate-300 font-medium text-xs opacity-30'
+                }`}
+              >
+                {v}{suffix}
+              </div>
+            );
+          })}
+          <div style={{ height: 2 * ITEM_HEIGHT }} />
+        </div>
+      </div>
+      <button type="button" onClick={() => nudge(1)} className="w-10 h-6 flex items-center justify-center rounded-lg hover:bg-white/60 active:bg-white/40 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/></svg>
+      </button>
+    </div>
+  );
+}
+
 function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm, onCancel }) {
   const today = new Date();
-  const initialDate = date ? new Date(date) : today;
+  const todayNormalized = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const initialDate = date ? new Date(date) : todayNormalized;
   const [currentMonth, setCurrentMonth] = useState(new Date(initialDate.getFullYear(), initialDate.getMonth(), 1));
-  const [selectedDate, setSelectedDate] = useState(date ? initialDate : null);
-  const [hour, setHour] = useState(time ? time.split(':')[0] : '12');
-  const [minute, setMinute] = useState(time ? time.split(':')[1] : '00');
+  const [selectedDate, setSelectedDate] = useState(initialDate);
+  const now = new Date();
+  const [hour, setHour] = useState(time ? time.split(':')[0] : String(now.getHours()).padStart(2, '0'));
+  const [minute, setMinute] = useState(time ? time.split(':')[1] : String(now.getMinutes()).padStart(2, '0'));
 
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const startDay = currentMonth.getDay();
@@ -140,18 +224,21 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
           if (!d) return <div key={i} className="h-8"></div>;
           const thisDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), d);
           const isSelected = selectedDate && thisDate.getTime() === selectedDate.getTime();
-          const isPast = thisDate.getTime() < new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-          
+          const isToday = thisDate.getTime() === todayNormalized.getTime();
+          const isPast = thisDate.getTime() < todayNormalized.getTime();
+
           return (
-            <button 
-              key={i} 
+            <button
+              key={i}
               disabled={isPast}
               onClick={() => setSelectedDate(thisDate)}
               className={`h-8 w-8 rounded-full text-xs font-bold mx-auto flex items-center justify-center transition-all ${
-                isSelected 
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 scale-110' 
-                  : isPast 
-                    ? 'text-slate-300 cursor-not-allowed' 
+                isSelected
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 scale-110'
+                  : isToday
+                    ? 'ring-2 ring-blue-400 text-blue-600 font-extrabold hover:bg-blue-50'
+                  : isPast
+                    ? 'text-slate-300 cursor-not-allowed'
                     : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
               }`}
             >
@@ -163,14 +250,20 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
 
       <div className="border-t border-slate-200/50 pt-5 mb-6">
         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">시간 설정</label>
-        <div className="flex items-center gap-3">
-          <select value={hour} onChange={e => setHour(e.target.value)} className="flex-1 bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-center font-mono font-bold text-slate-700 outline-none focus:border-blue-400 shadow-sm cursor-pointer hover:bg-white transition-colors">
-            {Array.from({length: 24}, (_, i) => String(i).padStart(2, '0')).map(h => <option key={h} value={h}>{h}시</option>)}
-          </select>
-          <span className="font-bold text-slate-400">:</span>
-          <select value={minute} onChange={e => setMinute(e.target.value)} className="flex-1 bg-slate-50/50 border border-slate-200 rounded-xl px-3 py-2.5 text-center font-mono font-bold text-slate-700 outline-none focus:border-blue-400 shadow-sm cursor-pointer hover:bg-white transition-colors">
-            {Array.from({length: 60}, (_, i) => String(i).padStart(2, '0')).map(m => <option key={m} value={m}>{m}분</option>)}
-          </select>
+        <div className="flex items-center justify-center gap-2">
+          <ScrollWheelPicker
+            values={Array.from({length: 24}, (_, i) => String(i).padStart(2, '0'))}
+            selected={hour}
+            onChange={setHour}
+            suffix="시"
+          />
+          <span className="font-extrabold text-slate-400 text-xl mt-1">:</span>
+          <ScrollWheelPicker
+            values={Array.from({length: 60}, (_, i) => String(i).padStart(2, '0'))}
+            selected={minute}
+            onChange={setMinute}
+            suffix="분"
+          />
         </div>
       </div>
 
