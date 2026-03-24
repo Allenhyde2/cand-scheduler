@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DebugTokenTest from './DebugTokenTest.jsx';
 
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -195,10 +196,11 @@ const getCurrentLocalISOString = () => {
 };
 
 export default function App() {
+  const [isDebugMode, setIsDebugMode] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
-  const [communityId] = useState(DEFAULT_GROUP_ID); 
-  const [sellerId, setSellerId] = useState(''); 
+  const [communityId] = useState(DEFAULT_GROUP_ID);
+  const [sellerId, setSellerId] = useState('');
   const [loginMode, setLoginMode] = useState('seller'); 
   const [activeTab, setActiveTab] = useState('productList'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
@@ -825,7 +827,24 @@ export default function App() {
   );
 
   // ==========================================
-  // 로그인 화면 
+  // 디버그 모드 화면
+  // ==========================================
+  if (isDebugMode) {
+    return (
+      <>
+        <GlobalStyles />
+        <div style={{ position: 'fixed', top: 12, right: 12, zIndex: 9999 }}>
+          <button onClick={() => setIsDebugMode(false)}
+            style={{ padding: '6px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+            디버그 닫기
+          </button>
+        </div>
+        <DebugTokenTest />
+      </>
+    );
+  }
+
+  // 로그인 화면
   // ==========================================
   if (!isAuthenticated) {
     return (
@@ -894,6 +913,12 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </div>
+            <div className="mt-4 text-center">
+              <button type="button" onClick={() => setIsDebugMode(true)}
+                className="text-[10px] text-slate-400/60 hover:text-slate-500 transition-colors font-mono tracking-wider">
+                Manual Token Test
+              </button>
             </div>
           </div>
         </div>
