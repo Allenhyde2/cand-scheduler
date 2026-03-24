@@ -26,13 +26,18 @@ export default function DebugTokenTest() {
   const [isLoading, setIsLoading] = useState(false);
   const [decodedToken, setDecodedToken] = useState(null);
   const [canpassToken, setCanpassToken] = useState(null);
+  const [fullTokenResponse, setFullTokenResponse] = useState(null);
 
-  // 로컬스토리지에서 CANpass 토큰 자동 로드
+  // 로컬스토리지에서 CANpass 토큰 및 전체 응답 자동 로드
   useEffect(() => {
     const saved = localStorage.getItem('cand_token');
     if (saved) {
       const decoded = decodeJwtPayload(saved);
       setCanpassToken({ raw: saved, decoded });
+    }
+    const fullResp = localStorage.getItem('cand_token_full_response');
+    if (fullResp) {
+      try { setFullTokenResponse(JSON.parse(fullResp)); } catch(e) {}
     }
   }, []);
 
@@ -182,6 +187,17 @@ export default function DebugTokenTest() {
             </div>
             {renderDecoded(canpassToken.decoded, 'CANpass OAuth 토큰 Payload')}
           </>
+        )}
+        {fullTokenResponse && (
+          <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 8, padding: 12, marginTop: 12 }}>
+            <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#854d0e' }}>CANpass /oauth2/token 전체 응답 (모든 키)</h4>
+            <div style={{ fontSize: 12, marginBottom: 8 }}>
+              <b>응답 키:</b> <code style={{ color: '#dc2626' }}>{Object.keys(fullTokenResponse).join(', ')}</code>
+            </div>
+            <pre style={{ background: '#1e293b', color: '#e2e8f0', padding: 12, borderRadius: 6, fontSize: 11, overflow: 'auto', maxHeight: 250, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {JSON.stringify(fullTokenResponse, null, 2)}
+            </pre>
+          </div>
         )}
       </div>
 
