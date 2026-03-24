@@ -7,6 +7,11 @@
 - [Swagger API Reference (canD API)](docs/swagger_api.md) - 전체 canD API 엔드포인트 문서
 - [canD API Swagger (Live)](https://api.moim.mobi/swagger#/) - Swagger UI 원본
 
+## Infrastructure Documents
+- [AWS Lambda 설정 가이드](docs/aws-lambda-guide.md) - IAM, DynamoDB, EventBridge, API Gateway 설정
+- [Phase 3 상품 상세 편집 계획서](docs/phase3-product-detail-edit-plan.md) - 옵션/가격/재고 편집 구현 계획
+- **Lambda 소스 코드**: `lambda/scheduler.js`
+
 ## Architecture
 - **Frontend**: React (Vite) - `src/App.jsx`
 - **Proxy Server**: Vercel Serverless Function - `api/proxy.js` (CORS 우회용)
