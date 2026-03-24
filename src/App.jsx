@@ -212,7 +212,7 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({ name: '', sku: '', tag: '', status: [], display: 'all' });
+  const [filters, setFilters] = useState({ name: '', status: [], display: 'all', sellerId: '' });
   const [pagingAfter, setPagingAfter] = useState(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -556,17 +556,9 @@ export default function App() {
         p.append('limit', '50');
         p.append('order', 'DESC');
         if (cursor) p.append('after', cursor);
-        if (filters.name) p.append('query', filters.name);
-        if (filters.sku) p.append('sku', filters.sku);
-        if (filters.tag) p.append('tag', filters.tag);
-        const searchSellerId = currentMode === 'seller' ? currentSellerId : (currentSellerId || filters.sellerId);
+        // 클라이언트 필터링이므로 API 파라미터 최소화 (전체 로드)
+        const searchSellerId = currentMode === 'seller' ? currentSellerId : currentSellerId;
         if (searchSellerId) p.append('sellerId', searchSellerId);
-        if (filters.status.length > 0) {
-          filters.status.forEach(s => p.append('status', s));
-        }
-        if (filters.display !== 'all') {
-          p.append('isDisplayed', filters.display);
-        }
         return p;
       };
 
@@ -621,18 +613,18 @@ export default function App() {
   // 클라이언트 사이드 필터링 + 페이지네이션
   const filteredProducts = products.filter(p => {
     if (filters.name && !(p.name || '').toLowerCase().includes(filters.name.toLowerCase())) return false;
-    if (filters.sku && !(p.sku || '').toLowerCase().includes(filters.sku.toLowerCase())) return false;
-    if (filters.tag) {
-      const tags = (p.tags || []).map(t => t.toLowerCase());
-      if (!tags.some(t => t.includes(filters.tag.toLowerCase()))) return false;
-    }
     if (filters.status.length > 0 && !filters.status.includes(p.status)) return false;
     if (filters.display !== 'all') {
-      const isDisp = filters.display === 'true';
-      if (p.isDisplayed !== isDisp) return false;
+      if (p.isDisplayed !== (filters.display === 'true')) return false;
     }
+    if (filters.sellerId && p.sellerId !== filters.sellerId) return false;
     return true;
   });
+
+  // 상품 데이터에서 고유 서브셀러 목록 추출
+  const uniqueSellers = [...new Map(
+    products.filter(p => p.sellerId).map(p => [p.sellerId, { id: p.sellerId, name: p.seller?.name || p.sellerId }])
+  ).values()];
   const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
   const displayedProducts = filteredProducts.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
@@ -646,7 +638,7 @@ export default function App() {
     return pages;
   };
 
-  const resetFilters = () => { setFilters({ name: '', sku: '', tag: '', status: [], display: 'all' }); setCurrentPage(1); };
+  const resetFilters = () => { setFilters({ name: '', status: [], display: 'all', sellerId: '' }); setCurrentPage(1); };
   const applyFilters = () => { setCurrentPage(1); }; // 클라이언트 필터링 — filteredProducts가 자동 반영
   const fetchProducts = () => { setCurrentPage(1); fetchProductsWithArgs(token, sellerId, loginMode); };
 
@@ -1100,14 +1092,50 @@ export default function App() {
                 </div>
                 {isFilterOpen && (
                   <div className="bg-white/40 backdrop-blur-md border-b border-white/50 p-4 sm:p-6 shadow-inner shrink-0 z-10">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <div><label className="block text-[10px] font-bold text-slate-400 mb-1">상품 이름</label><input type="text" value={filters.name} onChange={e => setFilters({...filters, name: e.target.value})} className={glassInput} /></div>
-                      <div><label className="block text-[10px] font-bold text-slate-400 mb-1">SKU 번호</label><input type="text" value={filters.sku} onChange={e => setFilters({...filters, sku: e.target.value})} className={glassInput} /></div>
-                      <div><label className="block text-[10px] font-bold text-slate-400 mb-1">태그</label><input type="text" value={filters.tag} onChange={e => setFilters({...filters, tag: e.target.value})} className={glassInput} /></div>
+                    {/* 1행: 상품 이름 + 진열 상태 */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1">상품 이름</label>
+                        <input type="text" value={filters.name} onChange={e => { setFilters({...filters, name: e.target.value}); setCurrentPage(1); }} placeholder="상품명 검색..." className={glassInput} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1">진열 상태</label>
+                        <GlassSelect value={filters.display} onChange={v => { setFilters({...filters, display: v}); setCurrentPage(1); }} options={[{ value: 'all', label: '전체' }, { value: 'true', label: '진열중' }, { value: 'false', label: '숨김' }]} />
+                      </div>
                     </div>
+                    {/* 2행: 판매 상태 체크박스 */}
+                    <div className="mt-4">
+                      <label className="block text-[10px] font-bold text-slate-400 mb-2">판매 상태</label>
+                      <div className="flex flex-wrap gap-2">
+                        {[{ value: 'scheduled', label: '판매예정' }, { value: 'onSale', label: '판매중' }, { value: 'soldOut', label: '품절' }, { value: 'completed', label: '판매종료' }].map(opt => {
+                          const isChecked = filters.status.includes(opt.value);
+                          return (
+                            <button key={opt.value} type="button"
+                              onClick={() => {
+                                const next = isChecked ? filters.status.filter(s => s !== opt.value) : [...filters.status, opt.value];
+                                setFilters({...filters, status: next}); setCurrentPage(1);
+                              }}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
+                                isChecked
+                                  ? 'bg-blue-500 text-white border-blue-400 shadow-md'
+                                  : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
+                              }`}>
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    {/* 3행: 서브셀러 필터 (셀러 데이터가 있을 때만 표시) */}
+                    {uniqueSellers.length > 0 && (
+                      <div className="mt-4">
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1">서브셀러</label>
+                        <GlassSelect value={filters.sellerId} onChange={v => { setFilters({...filters, sellerId: v}); setCurrentPage(1); }} options={[{ value: '', label: '전체' }, ...uniqueSellers.map(s => ({ value: s.id, label: s.name }))]} />
+                      </div>
+                    )}
+                    {/* 버튼 */}
                     <div className="mt-4 flex justify-end gap-2">
                       <button onClick={resetFilters} className="text-xs font-bold text-slate-500 hover:text-slate-700 active:text-slate-900 active:scale-95 transition-all">초기화</button>
-                      <button onClick={applyFilters} className={`px-4 py-2 rounded-xl text-xs font-bold shadow-md transition-all ${colorVariants.blue}`}>필터 적용</button>
                     </div>
                   </div>
                 )}
