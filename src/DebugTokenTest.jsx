@@ -64,29 +64,44 @@ export default function DebugTokenTest() {
     return h;
   };
 
-  const fetchProducts = async () => {
-    if (!token.trim()) { addLog('토큰을 입력하세요.', 'error'); return; }
+  const doFetchProducts = async (useToken, label) => {
     setIsLoading(true);
-    addLog(`GET /products 요청 시작 (community: ${communityId})`);
+    const params = new URLSearchParams({ endpoint: 'products', limit: '100', order: 'DESC' });
+    if (sellerId.trim()) params.append('sellerId', sellerId.trim());
+    const url = `${BACKEND_API_URL}/api/proxy?${params.toString()}`;
+    addLog(`[${label}] GET /products 요청 (community: ${communityId})`);
+    addLog(`요청 URL: ${url}`);
     try {
-      const params = new URLSearchParams({ endpoint: 'products', limit: '10', order: 'DESC' });
-      if (sellerId.trim()) params.append('sellerId', sellerId.trim());
-      const res = await fetch(`${BACKEND_API_URL}/api/proxy?${params.toString()}`, {
-        method: 'GET', headers: getHeaders()
-      });
+      const headers = {
+        'content-type': 'application/json',
+        'authorization': `Bearer ${useToken.trim().replace(/^Bearer\s+/i, '')}`,
+        'x-can-community-id': communityId.trim(),
+      };
+      if (sellerId.trim()) headers['x-can-profile-id'] = sellerId.trim();
+      const res = await fetch(url, { method: 'GET', headers });
       const data = await res.json();
       if (!res.ok) {
-        addLog(`GET 실패: ${res.status} — ${JSON.stringify(data)}`, 'error');
+        addLog(`[${label}] GET 실패: ${res.status} — ${JSON.stringify(data)}`, 'error');
         return;
       }
       const list = data.data || [];
       setProducts(list);
-      addLog(`GET 성공: ${list.length}개 상품 조회`, 'success');
+      addLog(`[${label}] GET 성공: ${list.length}개 상품 조회`, 'success');
     } catch (err) {
-      addLog(`GET 에러: ${err.message}`, 'error');
+      addLog(`[${label}] GET 에러: ${err.message}`, 'error');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const fetchProducts = async () => {
+    if (!token.trim()) { addLog('토큰을 입력하세요.', 'error'); return; }
+    await doFetchProducts(token, '수동 토큰');
+  };
+
+  const fetchProductsWithCanpass = async () => {
+    if (!canpassToken?.raw) { addLog('CANpass 토큰이 없습니다. 먼저 CANpass로 로그인하세요.', 'error'); return; }
+    await doFetchProducts(canpassToken.raw, 'CANpass');
   };
 
   const testPut = async (product) => {
@@ -224,10 +239,16 @@ export default function DebugTokenTest() {
               style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }} />
           </div>
         </div>
-        <button onClick={fetchProducts} disabled={isLoading}
-          style={{ padding: '10px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14 }}>
-          {isLoading ? '조회 중...' : '상품 조회 (GET) — 수동 토큰'}
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button onClick={fetchProducts} disabled={isLoading}
+            style={{ padding: '10px 20px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 14, flex: 1 }}>
+            {isLoading ? '조회 중...' : '상품 조회 (GET) — 수동 토큰'}
+          </button>
+          <button onClick={fetchProductsWithCanpass} disabled={isLoading || !canpassToken}
+            style={{ padding: '10px 20px', background: canpassToken ? '#7c3aed' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: canpassToken ? 'pointer' : 'not-allowed', fontSize: 14, flex: 1 }}>
+            {isLoading ? '조회 중...' : 'CANpass 토큰으로 조회'}
+          </button>
+        </div>
       </div>
 
       {products.length > 0 && (
