@@ -74,8 +74,8 @@ function GlassSelect({ value, options, onChange, placeholder = "선택해주세�
         <svg className={`w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
       </div>
       
-      <div className={`absolute left-0 right-0 top-full mt-2 z-[200] transition-all duration-300 ease-out origin-top ${isOpen ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0 pointer-events-none'}`}>
-        <div className="bg-white/90 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-xl p-1.5 overflow-hidden">
+      <div className={`absolute left-0 right-0 top-full mt-1 z-[200] transition-all duration-300 ease-out origin-top ${isOpen ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0 pointer-events-none'}`}>
+        <div className="bg-white/95 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-2xl p-1.5 overflow-hidden max-h-60 overflow-y-auto">
           {options.map((opt) => (
             <div 
               key={opt.value}
@@ -1092,50 +1092,61 @@ export default function App() {
                 </div>
                 {isFilterOpen && (
                   <div className="bg-white/40 backdrop-blur-md border-b border-white/50 p-4 sm:p-6 shadow-inner shrink-0 z-10">
-                    {/* 1행: 상품 이름 + 진열 상태 */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1">상품 이름</label>
-                        <input type="text" value={filters.name} onChange={e => { setFilters({...filters, name: e.target.value}); setCurrentPage(1); }} placeholder="상품명 검색..." className={glassInput} />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1">진열 상태</label>
-                        <GlassSelect value={filters.display} onChange={v => { setFilters({...filters, display: v}); setCurrentPage(1); }} options={[{ value: 'all', label: '전체' }, { value: 'true', label: '진열중' }, { value: 'false', label: '숨김' }]} />
-                      </div>
+                    {/* 1행: 상품 이름 검색 */}
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 mb-1">상품 이름</label>
+                      <input type="text" value={filters.name} onChange={e => { setFilters({...filters, name: e.target.value}); setCurrentPage(1); }} placeholder="상품명 검색..." className={glassInput} />
                     </div>
-                    {/* 2행: 판매 상태 체크박스 */}
-                    <div className="mt-4">
-                      <label className="block text-[10px] font-bold text-slate-400 mb-2">판매 상태</label>
-                      <div className="flex flex-wrap gap-2">
-                        {[{ value: 'scheduled', label: '판매예정' }, { value: 'onSale', label: '판매중' }, { value: 'soldOut', label: '품절' }, { value: 'completed', label: '판매종료' }].map(opt => {
-                          const isChecked = filters.status.includes(opt.value);
-                          return (
+                    {/* 2행: 진열 상태 + 판매 상태 태그 (같은 줄) */}
+                    <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1.5">진열 상태</label>
+                        <div className="flex gap-1.5">
+                          {[{ value: 'all', label: '전체' }, { value: 'true', label: '진열중' }, { value: 'false', label: '숨김' }].map(opt => (
                             <button key={opt.value} type="button"
-                              onClick={() => {
-                                const next = isChecked ? filters.status.filter(s => s !== opt.value) : [...filters.status, opt.value];
-                                setFilters({...filters, status: next}); setCurrentPage(1);
-                              }}
+                              onClick={() => { setFilters({...filters, display: opt.value}); setCurrentPage(1); }}
                               className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
-                                isChecked
-                                  ? 'bg-blue-500 text-white border-blue-400 shadow-md'
+                                filters.display === opt.value
+                                  ? 'bg-indigo-500 text-white border-indigo-400 shadow-md'
                                   : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
                               }`}>
                               {opt.label}
                             </button>
-                          );
-                        })}
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1.5">판매 상태</label>
+                        <div className="flex gap-1.5">
+                          {[{ value: 'scheduled', label: '판매예정' }, { value: 'onSale', label: '판매중' }, { value: 'soldOut', label: '품절' }, { value: 'completed', label: '판매종료' }].map(opt => {
+                            const isChecked = filters.status.includes(opt.value);
+                            return (
+                              <button key={opt.value} type="button"
+                                onClick={() => {
+                                  const next = isChecked ? filters.status.filter(s => s !== opt.value) : [...filters.status, opt.value];
+                                  setFilters({...filters, status: next}); setCurrentPage(1);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
+                                  isChecked
+                                    ? 'bg-blue-500 text-white border-blue-400 shadow-md'
+                                    : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
+                                }`}>
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
-                    {/* 3행: 서브셀러 필터 (셀러 데이터가 있을 때만 표시) */}
-                    {uniqueSellers.length > 0 && (
-                      <div className="mt-4">
-                        <label className="block text-[10px] font-bold text-slate-400 mb-1">서브셀러</label>
-                        <GlassSelect value={filters.sellerId} onChange={v => { setFilters({...filters, sellerId: v}); setCurrentPage(1); }} options={[{ value: '', label: '전체' }, ...uniqueSellers.map(s => ({ value: s.id, label: s.name }))]} />
-                      </div>
-                    )}
-                    {/* 버튼 */}
-                    <div className="mt-4 flex justify-end gap-2">
-                      <button onClick={resetFilters} className="text-xs font-bold text-slate-500 hover:text-slate-700 active:text-slate-900 active:scale-95 transition-all">초기화</button>
+                    {/* 3행: 서브셀러 + 초기화 */}
+                    <div className="mt-3 flex items-end gap-4">
+                      {uniqueSellers.length > 0 && (
+                        <div className="flex-1 min-w-0">
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">서브셀러</label>
+                          <GlassSelect value={filters.sellerId} onChange={v => { setFilters({...filters, sellerId: v}); setCurrentPage(1); }} options={[{ value: '', label: '전체' }, ...uniqueSellers.map(s => ({ value: s.id, label: s.name }))]} />
+                        </div>
+                      )}
+                      <button onClick={resetFilters} className="shrink-0 text-xs font-bold text-slate-500 hover:text-slate-700 active:text-slate-900 active:scale-95 transition-all pb-2">초기화</button>
                     </div>
                   </div>
                 )}
