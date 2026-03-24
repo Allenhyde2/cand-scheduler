@@ -1262,61 +1262,68 @@ export default function App() {
                   </div>
                 )}
                 <div className="flex-1 overflow-auto custom-scrollbar">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
+                  {/* 공통 상태: 에러/로딩/빈 목록 */}
+                  {(loginMode === 'seller' && !sellerId) ? (
+                    <div className="p-10 md:p-20 text-center text-slate-500">
+                      <div className="bg-white/60 p-6 rounded-2xl border border-white/60 shadow-sm max-w-sm mx-auto">
+                        <p className="mb-2 font-extrabold text-red-500 text-sm">⚠️ 셀러 ID 추출 실패</p>
+                        <p className="text-[11px] text-slate-500 font-bold leading-relaxed">보안 정책 및 접근 권한 제한으로 인해 판매자 아이디를 찾지 못했습니다.<br/>다시 로그인하거나 관리자에게 문의해주세요.</p>
+                      </div>
+                    </div>
+                  ) : isLoading && products.length === 0 ? (
+                    <div className="p-20 text-center">
+                      <div className="flex flex-col items-center justify-center space-y-4">
+                        <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin shadow-md"></div>
+                        <p className="font-extrabold text-blue-600 text-sm animate-pulse tracking-widest uppercase">Loading...</p>
+                      </div>
+                    </div>
+                  ) : products.length === 0 ? (
+                    <div className="p-16 text-center text-slate-400 font-extrabold text-sm">조회된 상품이 없습니다.</div>
+                  ) : (<>
+                  {/* 모바일 카드 뷰 */}
+                  <div className="md:hidden p-3 space-y-2.5">
+                    {displayedProducts.map(p => (
+                      <div key={p.id} className="bg-white/50 border border-white/60 rounded-2xl p-4 shadow-sm hover:bg-white/70 transition-all active:scale-[0.99]">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1 min-w-0 mr-3">
+                            <p className="font-extrabold text-slate-800 text-sm truncate">{p.name || '이름 없음'}</p>
+                            <p className="text-[9px] text-slate-400 font-mono mt-0.5">{p.id}</p>
+                          </div>
+                          <button onClick={() => openProductEditModal(p)} className="shrink-0 text-[11px] font-bold text-blue-600 bg-white/60 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 transition-all">수정</button>
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50' : 'bg-slate-400/15 text-slate-500 border-slate-300/50'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({scheduled:'bg-amber-500/15 text-amber-600 border-amber-300/50',onSale:'bg-blue-500/15 text-blue-600 border-blue-300/50',soldOut:'bg-red-500/15 text-red-500 border-red-300/50',completed:'bg-slate-400/15 text-slate-400 border-slate-300/50'})[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* 데스크톱 테이블 뷰 */}
+                  <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-white/40 backdrop-blur-md border-b border-white/40 text-slate-500 sticky top-0 z-10">
                       <tr><th className="px-6 py-4">상품 정보</th><th className="px-6 py-4 text-right">가격</th><th className="px-6 py-4 text-center">진열</th><th className="px-6 py-4 text-center">상태</th><th className="px-6 py-4 text-center">관리</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/40">
-                      {(loginMode === 'seller' && !sellerId) ? (
-                        <tr><td colSpan="6" className="p-10 md:p-20 text-center text-slate-500">
-                          <div className="bg-white/60 p-6 rounded-2xl border border-white/60 shadow-sm max-w-sm mx-auto">
-                            <p className="mb-2 font-extrabold text-red-500 text-sm">⚠️ 셀러 ID 추출 실패</p>
-                            <p className="text-[11px] text-slate-500 font-bold leading-relaxed">보안 정책 및 접근 권한 제한으로 인해 판매자 아이디를 찾지 못했습니다.<br/>다시 로그인하거나 관리자에게 문의해주세요.</p>
-                          </div>
-                        </td></tr>
-                      ) : isLoading && products.length === 0 ? (
-                        <tr><td colSpan="6" className="p-20 text-center">
-                          <div className="flex flex-col items-center justify-center space-y-4">
-                            <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin shadow-md"></div>
-                            <p className="font-extrabold text-blue-600 text-sm animate-pulse tracking-widest uppercase">Loading...</p>
-                          </div>
-                        </td></tr>
-                      ) : products.length === 0 ? (
-                        <tr><td colSpan="6" className="p-16 text-center text-slate-400 font-extrabold text-sm">조회된 상품이 없습니다.</td></tr>
-                      ) : (
-                        displayedProducts.map(p => {
-                          const imgUrl = p.images?.mobile?.[0] || p.images?.web?.[0] || '';
-                          return (
-                            <tr key={p.id} className="hover:bg-white/40 transition-colors group">
-                              <td className="px-6 py-4">
-                                <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name || '이름 없음'}</p>
-                                <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
-                              </td>
-                              <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
-                              <td className="px-6 py-4 text-center">
-                                <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${
-                                  p.isDisplayed
-                                    ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]'
-                                    : 'bg-slate-400/15 text-slate-500 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'
-                                }`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
-                              </td>
-                              <td className="px-6 py-4 text-center">
-                                <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${
-                                  ({
-                                    scheduled: 'bg-amber-500/15 text-amber-600 border-amber-300/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]',
-                                    onSale: 'bg-blue-500/15 text-blue-600 border-blue-300/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]',
-                                    soldOut: 'bg-red-500/15 text-red-500 border-red-300/50 shadow-[0_0_8px_rgba(239,68,68,0.3)]',
-                                    completed: 'bg-slate-400/15 text-slate-400 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'
-                                  })[p.status] || 'bg-white/50 text-slate-500 border-white/60'
-                                }`}>{translateStatus(p.status)}</span>
-                              </td>
-                              <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
-                            </tr>
-                          )
-                        })
-                      )}
+                      {displayedProducts.map(p => (
+                        <tr key={p.id} className="hover:bg-white/40 transition-colors group">
+                          <td className="px-6 py-4">
+                            <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name || '이름 없음'}</p>
+                            <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
+                          </td>
+                          <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-slate-400/15 text-slate-500 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${({scheduled:'bg-amber-500/15 text-amber-600 border-amber-300/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]',onSale:'bg-blue-500/15 text-blue-600 border-blue-300/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]',soldOut:'bg-red-500/15 text-red-500 border-red-300/50 shadow-[0_0_8px_rgba(239,68,68,0.3)]',completed:'bg-slate-400/15 text-slate-400 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'})[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
+                          </td>
+                          <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
+                  </>)}
                   {/* 페이지네이션 */}
                   {products.length > 0 && (
                     <div className="bg-white/30 backdrop-blur-md border-t border-white/40 px-6 py-3 flex items-center justify-between">
@@ -1324,8 +1331,17 @@ export default function App() {
                         총 {filteredProducts.length}개{filteredProducts.length !== products.length ? ` (전체 ${products.length})` : ''} · {currentPage}/{totalPages} 페이지
                         {isLoadingMore && <span className="inline-flex items-center gap-1 text-blue-500"><span className="w-3 h-3 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin"></span>로딩중...</span>}
                       </span>
-                      {totalPages > 1 && (
-                        <div className="flex items-center gap-1">
+                      {totalPages > 1 && (<>
+                        {/* 모바일: 간소화 */}
+                        <div className="flex md:hidden items-center gap-2">
+                          <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
+                            className="px-3 py-2 text-xs font-bold rounded-xl bg-white/50 border border-white/60 hover:bg-white/80 active:scale-95 disabled:opacity-30 transition-all text-slate-500">이전</button>
+                          <span className="text-xs font-extrabold text-blue-600">{currentPage}/{totalPages}</span>
+                          <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
+                            className="px-3 py-2 text-xs font-bold rounded-xl bg-white/50 border border-white/60 hover:bg-white/80 active:scale-95 disabled:opacity-30 transition-all text-slate-500">다음</button>
+                        </div>
+                        {/* 데스크톱: 전체 */}
+                        <div className="hidden md:flex items-center gap-1">
                           <button onClick={() => setCurrentPage(1)} disabled={currentPage === 1}
                             className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">«</button>
                           <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}
@@ -1343,7 +1359,7 @@ export default function App() {
                           <button onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}
                             className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">»</button>
                         </div>
-                      )}
+                      </>)}
                     </div>
                   )}
                 </div>
@@ -1490,17 +1506,17 @@ export default function App() {
                   {/* ⭐️ 예약 생성기 캘린더 모듈 위치 지정 코드 */}
                   {isDatePickerOpen && (
                     <>
-                      <div className="fixed inset-0 z-[900]" onClick={() => setIsDatePickerOpen(false)}></div>
-                      <div className="absolute top-16 right-8 md:right-20 z-[1000]">
-                        <GlassDateTimePicker 
-                          date={pickerDate} 
-                          time={pickerTime} 
-                          onDateChange={setPickerDate} 
-                          onTimeChange={setPickerTime} 
-                          onConfirm={handleConfirmDatePicker} 
-                          onCancel={() => setIsDatePickerOpen(false)} 
+                      <div className="fixed inset-0 z-[900] bg-slate-900/10 md:bg-transparent" onClick={() => setIsDatePickerOpen(false)}></div>
+                      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 md:absolute md:inset-auto md:top-16 md:right-20 pointer-events-none"><div className="pointer-events-auto">
+                        <GlassDateTimePicker
+                          date={pickerDate}
+                          time={pickerTime}
+                          onDateChange={setPickerDate}
+                          onTimeChange={setPickerTime}
+                          onConfirm={handleConfirmDatePicker}
+                          onCancel={() => setIsDatePickerOpen(false)}
                         />
-                      </div>
+                      </div></div>
                     </>
                   )}
 
@@ -1558,7 +1574,7 @@ export default function App() {
               </div>
               <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
                 <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">상품명</label><input type="text" value={productEditModal.name} onChange={e => setProductEditModal({...productEditModal, name: e.target.value})} className={glassInput} /></div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">가격 (KRW)</label><input type="number" value={productEditModal.price} onChange={e => setProductEditModal({...productEditModal, price: e.target.value})} className={`${glassInput} font-mono`} /></div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">재고 설정</label>
