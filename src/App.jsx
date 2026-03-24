@@ -571,21 +571,31 @@ export default function App() {
         return JSON.parse(responseText);
       };
 
-      // 자동 전체 로드: 커서가 있는 한 반복 fetch
-      let allItems = [];
-      let cursor = null;
-      do {
-        const params = buildBaseParams(cursor);
-        const data = await doFetch(params);
-        const list = data.data || [];
-        allItems = [...allItems, ...list];
-        cursor = data.paging?.after || null;
-      } while (cursor);
-
-      // 중복 제거
-      const deduped = [...new Map(allItems.map(p => [p.id, p])).values()];
-      setProducts(deduped);
+      // 1차: 첫 50개 즉시 표시
+      const firstParams = buildBaseParams(null);
+      const firstData = await doFetch(firstParams);
+      const firstList = firstData.data || [];
+      setProducts(firstList);
       setCurrentPage(1);
+      setIsLoading(false);
+
+      // 2차: 나머지 백그라운드 로드
+      let cursor = firstData.paging?.after || null;
+      if (cursor) {
+        setIsLoadingMore(true);
+        let allItems = [...firstList];
+        while (cursor) {
+          const params = buildBaseParams(cursor);
+          const data = await doFetch(params);
+          const list = data.data || [];
+          allItems = [...allItems, ...list];
+          cursor = data.paging?.after || null;
+          // 매 페이지마다 UI 업데이트
+          const deduped = [...new Map(allItems.map(p => [p.id, p])).values()];
+          setProducts(deduped);
+        }
+        setIsLoadingMore(false);
+      }
       setPagingAfter(null);
     } catch (err) {
       showToast('목록 로드 실패: ' + err.message, 'error');
@@ -1119,8 +1129,9 @@ export default function App() {
                   {/* 페이지네이션 */}
                   {products.length > 0 && (
                     <div className="bg-white/30 backdrop-blur-md border-t border-white/40 px-6 py-3 flex items-center justify-between">
-                      <span className="text-[11px] text-slate-400 font-bold">
+                      <span className="text-[11px] text-slate-400 font-bold flex items-center gap-2">
                         총 {products.length}개 · {currentPage}/{totalPages} 페이지
+                        {isLoadingMore && <span className="inline-flex items-center gap-1 text-blue-500"><span className="w-3 h-3 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin"></span>로딩중...</span>}
                       </span>
                       {totalPages > 1 && (
                         <div className="flex items-center gap-1">
