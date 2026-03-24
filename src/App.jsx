@@ -539,31 +539,61 @@ export default function App() {
     try {
       const activeToken = currentToken || token;
       if (!activeToken) throw new Error("유효한 토큰이 없습니다.");
-      const params = new URLSearchParams();
-      params.append('endpoint', 'products');
-      params.append('limit', '50'); 
-      params.append('order', 'DESC');
-      if (isLoadMore && pagingAfter) params.append('after', pagingAfter);
-      if (filters.name) params.append('query', filters.name);
-      if (filters.sku) params.append('sku', filters.sku);
-      if (filters.tag) params.append('tag', filters.tag);
-      const searchSellerId = currentMode === 'seller' ? currentSellerId : (currentSellerId || filters.sellerId);
-      if (searchSellerId) params.append('sellerId', searchSellerId);
-      if (filters.status.length > 0) {
-        filters.status.forEach(s => params.append('status', s));
+
+      // 공통 파라미터 빌드 (isDisplayed 제외)
+      const buildBaseParams = () => {
+        const p = new URLSearchParams();
+        p.append('endpoint', 'products');
+        p.append('limit', '50');
+        p.append('order', 'DESC');
+        if (isLoadMore && pagingAfter) p.append('after', pagingAfter);
+        if (filters.name) p.append('query', filters.name);
+        if (filters.sku) p.append('sku', filters.sku);
+        if (filters.tag) p.append('tag', filters.tag);
+        const searchSellerId = currentMode === 'seller' ? currentSellerId : (currentSellerId || filters.sellerId);
+        if (searchSellerId) p.append('sellerId', searchSellerId);
+        if (filters.status.length > 0) {
+          filters.status.forEach(s => p.append('status', s));
+        }
+        return p;
+      };
+
+      // 단일 fetch 헬퍼
+      const doFetch = async (params) => {
+        const url = `${BACKEND_API_URL}/api/proxy?${params.toString()}`;
+        const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken) });
+        const responseText = await res.text();
+        if (!res.ok) throw new Error(`API 오류: ${res.status}`);
+        return JSON.parse(responseText);
+      };
+
+      // 필터가 'all'이고 첫 로드일 때: 진열중 + 숨김 병렬 조회
+      if (filters.display === 'all' && !isLoadMore) {
+        const paramsDisplayed = buildBaseParams();
+        paramsDisplayed.append('isDisplayed', 'true');
+        const paramsHidden = buildBaseParams();
+        paramsHidden.append('isDisplayed', 'false');
+
+        const [dataDisplayed, dataHidden] = await Promise.all([
+          doFetch(paramsDisplayed),
+          doFetch(paramsHidden)
+        ]);
+
+        const displayed = dataDisplayed.data || [];
+        const hidden = dataHidden.data || [];
+        setProducts([...displayed, ...hidden]);
+        // 페이징은 진열중 목록 기준
+        setPagingAfter(dataDisplayed.paging?.after || null);
+      } else {
+        // 필터 지정 또는 loadMore: 기존 단일 조회
+        const params = buildBaseParams();
+        if (filters.display !== 'all') params.append('isDisplayed', filters.display);
+        const data = await doFetch(params);
+        const list = data.data || [];
+        if (isLoadMore) setProducts(prev => [...prev, ...list]);
+        else setProducts(list);
+        setPagingAfter(data.paging?.after || null);
       }
-      if (filters.display !== 'all') params.append('isDisplayed', filters.display);
-      
-      const url = `${BACKEND_API_URL}/api/proxy?${params.toString()}`;
-      
-      const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(activeToken) });
-      const responseText = await res.text();
-      if (!res.ok) throw new Error(`API 오류: ${res.status}`);
-      const data = JSON.parse(responseText);
-      const list = data.data || [];
-      if (isLoadMore) setProducts(prev => [...prev, ...list]);
-      else setProducts(list);
-      setPagingAfter(data.paging && data.paging.after ? data.paging.after : null);
     } catch (err) {
       showToast('목록 로드 실패: ' + err.message, 'error');
     } finally {
