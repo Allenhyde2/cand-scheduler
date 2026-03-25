@@ -927,21 +927,12 @@ export default function App() {
         requestHeaders['x-can-profile-id'] = sellerId;
       }
 
-      // ⭐️ 서브셀러 상품은 seller admin API 사용
-      const parentSid = _original.parentSellerId;
-      let url, finalPayload;
-      if (parentSid) {
-        url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`admin/sellers/${parentSid}/products/${id}`)}&baseUrl=${encodeURIComponent('https://payment.moim.co')}`;
-        finalPayload = { product: payload };
-      } else {
-        url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`products/${id}`)}`;
-        finalPayload = payload;
-      }
+      const url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`products/${id}`)}`;
 
       const res = await fetch(url, {
         method: 'PUT',
         headers: requestHeaders,
-        body: JSON.stringify(finalPayload)
+        body: JSON.stringify(payload)
       });
       
       if (!res.ok) {
