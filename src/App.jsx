@@ -1312,12 +1312,16 @@ export default function App() {
                   <div className="md:hidden p-3 space-y-2.5">
                     {displayedProducts.map(p => (
                       <div key={p.id} className="bg-white/50 border border-white/60 rounded-2xl p-4 shadow-sm hover:bg-white/70 transition-all active:scale-[0.99]">
-                        <div className="flex justify-between items-start mb-2">
-                          <div className="flex-1 min-w-0 mr-3">
+                        <div className="flex gap-3 mb-2">
+                          <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-slate-100 border border-white/60">
+                            {p.images?.mobile?.[0]?.url ? <img src={p.images.mobile[0].url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-lg">📦</div>}
+                          </div>
+                          <div className="flex-1 min-w-0">
                             <p className="font-extrabold text-slate-800 text-sm truncate">{p.name || '이름 없음'}</p>
                             <p className="text-[9px] text-slate-400 font-mono mt-0.5">{p.id}</p>
+                            {p.sellerId && <p className="text-[10px] text-slate-500 font-bold mt-0.5 truncate">{sellerNames[p.sellerId] || p.sellerId}</p>}
                           </div>
-                          <button onClick={() => openProductEditModal(p)} className="shrink-0 text-[11px] font-bold text-blue-600 bg-white/60 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 transition-all">수정</button>
+                          <button onClick={() => openProductEditModal(p)} className="shrink-0 self-start text-[11px] font-bold text-blue-600 bg-white/60 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 transition-all">수정</button>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</span>
@@ -1330,23 +1334,31 @@ export default function App() {
                   {/* 데스크톱 테이블 뷰 */}
                   <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-white/40 backdrop-blur-md border-b border-white/40 text-slate-500 sticky top-0 z-10">
-                      <tr><th className="px-6 py-4">상품 정보</th><th className="px-6 py-4 text-right">가격</th><th className="px-6 py-4 text-center">진열</th><th className="px-6 py-4 text-center">상태</th><th className="px-6 py-4 text-center">관리</th></tr>
+                      <tr><th className="pl-6 pr-2 py-4 w-[52px]"></th><th className="px-4 py-4">상품 정보</th><th className="px-4 py-4">판매자</th><th className="px-4 py-4 text-right">가격</th><th className="px-4 py-4 text-center">진열</th><th className="px-4 py-4 text-center">상태</th><th className="px-4 py-4 text-center">관리</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/40">
                       {displayedProducts.map(p => (
                         <tr key={p.id} className="hover:bg-white/40 transition-colors group">
-                          <td className="px-6 py-4">
+                          <td className="pl-6 pr-2 py-3">
+                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-white/60 shrink-0">
+                              {p.images?.mobile?.[0]?.url ? <img src={p.images.mobile[0].url} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-sm">📦</div>}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
                             <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name || '이름 없음'}</p>
                             <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
                           </td>
-                          <td className="px-6 py-4 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-4 py-3">
+                            <span className="text-xs font-bold text-slate-600 truncate block max-w-[120px]">{sellerNames[p.sellerId] || p.sellerId || '-'}</span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
+                          <td className="px-4 py-3 text-center">
                             <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-slate-400/15 text-slate-500 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
                           </td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-4 py-3 text-center">
                             <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${({scheduled:'bg-amber-500/15 text-amber-600 border-amber-300/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]',onSale:'bg-blue-500/15 text-blue-600 border-blue-300/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]',soldOut:'bg-red-500/15 text-red-500 border-red-300/50 shadow-[0_0_8px_rgba(239,68,68,0.3)]',completed:'bg-slate-400/15 text-slate-400 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'})[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
                           </td>
-                          <td className="px-6 py-4 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
+                          <td className="px-4 py-3 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
                         </tr>
                       ))}
                     </tbody>
