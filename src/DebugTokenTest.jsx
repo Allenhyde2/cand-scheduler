@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const BACKEND_API_URL = 'https://cand-scheduler.vercel.app';
+const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 
 // JWT payload 디코딩 (서명 검증 없이 payload만 읽기)
@@ -27,6 +28,8 @@ export default function DebugTokenTest() {
   const [decodedToken, setDecodedToken] = useState(null);
   const [canpassToken, setCanpassToken] = useState(null);
   const [fullTokenResponse, setFullTokenResponse] = useState(null);
+  const [historyLogs, setHistoryLogs] = useState([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   // 로컬스토리지에서 CANpass 토큰 및 전체 응답 자동 로드
   useEffect(() => {
@@ -154,6 +157,46 @@ export default function DebugTokenTest() {
       }
     } catch (err) {
       addLog(`[CANpass] PUT 에러: ${err.message}`, 'error');
+    }
+  };
+
+  // --- 실행 로그 조회 (Lambda HISTORY 직접 호출) ---
+  const fetchHistoryLogs = async (useToken, label) => {
+    setIsHistoryLoading(true);
+    const cid = communityId.trim() || DEFAULT_GROUP_ID;
+    addLog(`[${label}] HISTORY 요청 (communityId: ${cid})`);
+    addLog(`엔드포인트: ${SCHEDULER_API_URL}`);
+    try {
+      const headers = { 'content-type': 'application/json' };
+      if (useToken) {
+        headers['authorization'] = `Bearer ${useToken.trim().replace(/^Bearer\s+/i, '')}`;
+        headers['x-can-community-id'] = cid;
+      }
+      const body = JSON.stringify({ action: 'HISTORY', communityId: cid, token: useToken || '' });
+      addLog(`요청 body: ${body}`);
+      const res = await fetch(SCHEDULER_API_URL, { method: 'POST', headers, body });
+      const rawText = await res.text();
+      addLog(`응답 status: ${res.status}`);
+      addLog(`응답 body: ${rawText.substring(0, 500)}${rawText.length > 500 ? '...' : ''}`);
+      if (!res.ok) {
+        addLog(`[${label}] HISTORY 실패: ${res.status}`, 'error');
+        return;
+      }
+      let data;
+      try { data = JSON.parse(rawText); } catch (e) {
+        addLog(`[${label}] JSON 파싱 실패: ${e.message}`, 'error');
+        return;
+      }
+      const logs = data.logs || [];
+      setHistoryLogs(logs);
+      addLog(`[${label}] HISTORY 성공: ${logs.length}개 로그 조회`, logs.length > 0 ? 'success' : 'info');
+      if (logs.length === 0) {
+        addLog(`로그가 비어있습니다. DynamoDB에 기록된 실행 로그가 없거나, communityId가 일치하지 않습니다.`, 'info');
+      }
+    } catch (err) {
+      addLog(`[${label}] HISTORY 에러: ${err.message}`, 'error');
+    } finally {
+      setIsHistoryLoading(false);
     }
   };
 
@@ -291,6 +334,87 @@ export default function DebugTokenTest() {
           </table>
         </div>
       )}
+
+      {/* 실행 로그 조회 (HISTORY API 직접 호출) */}
+      <div style={{ background: '#faf5ff', border: '2px solid #c084fc', borderRadius: 8, padding: 16, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#7c3aed' }}>📋 예약 실행 로그 조회 (Lambda HISTORY)</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6b7280' }}>
+          Lambda에 직접 HISTORY action을 보내 DynamoDB에 저장된 실행 로그를 조회합니다. 위 Community ID 값을 사용합니다.
+        </p>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+          <button onClick={() => fetchHistoryLogs(token, '수동 토큰')} disabled={isHistoryLoading || !token.trim()}
+            style={{ padding: '10px 20px', background: token.trim() ? '#2563eb' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: token.trim() ? 'pointer' : 'not-allowed', fontSize: 13, flex: 1 }}>
+            {isHistoryLoading ? '조회 중...' : '수동 토큰으로 로그 조회'}
+          </button>
+          <button onClick={() => fetchHistoryLogs(canpassToken?.raw, 'CANpass')} disabled={isHistoryLoading || !canpassToken}
+            style={{ padding: '10px 20px', background: canpassToken ? '#7c3aed' : '#9ca3af', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: canpassToken ? 'pointer' : 'not-allowed', fontSize: 13, flex: 1 }}>
+            {isHistoryLoading ? '조회 중...' : 'CANpass 토큰으로 로그 조회'}
+          </button>
+          <button onClick={() => fetchHistoryLogs('', '토큰 없음')} disabled={isHistoryLoading}
+            style={{ padding: '10px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 700, cursor: 'pointer', fontSize: 13, flex: 1 }}>
+            {isHistoryLoading ? '조회 중...' : '토큰 없이 조회 (테스트)'}
+          </button>
+        </div>
+
+        {historyLogs.length > 0 && (
+          <div>
+            <h4 style={{ margin: '0 0 8px', fontSize: 13, color: '#581c87' }}>조회 결과: {historyLogs.length}건</h4>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: '#ede9fe' }}>
+                    <th style={{ padding: 6, textAlign: 'left', borderBottom: '2px solid #c084fc' }}>실행 시각</th>
+                    <th style={{ padding: 6, textAlign: 'left', borderBottom: '2px solid #c084fc' }}>태스크 ID</th>
+                    <th style={{ padding: 6, textAlign: 'left', borderBottom: '2px solid #c084fc' }}>상품</th>
+                    <th style={{ padding: 6, textAlign: 'center', borderBottom: '2px solid #c084fc' }}>결과</th>
+                    <th style={{ padding: 6, textAlign: 'left', borderBottom: '2px solid #c084fc' }}>메시지</th>
+                    <th style={{ padding: 6, textAlign: 'center', borderBottom: '2px solid #c084fc' }}>변경 상태</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historyLogs.map((h, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #e9d5ff', background: h.success ? '#f0fdf4' : '#fef2f2' }}>
+                      <td style={{ padding: 6, fontFamily: 'monospace', fontSize: 10 }}>
+                        {h.executedAt ? new Date(h.executedAt).toLocaleString('ko-KR') : '-'}
+                      </td>
+                      <td style={{ padding: 6, fontFamily: 'monospace', fontSize: 10 }}>{h.taskId || '-'}</td>
+                      <td style={{ padding: 6 }}>
+                        <div style={{ fontWeight: 600 }}>{h.productName || '-'}</div>
+                        <div style={{ fontSize: 9, color: '#9ca3af', fontFamily: 'monospace' }}>{h.productId || ''}</div>
+                      </td>
+                      <td style={{ padding: 6, textAlign: 'center' }}>
+                        <span style={{
+                          display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                          background: h.success ? '#dcfce7' : '#fee2e2',
+                          color: h.success ? '#166534' : '#991b1b',
+                        }}>
+                          {h.success ? '성공' : '실패'}
+                        </span>
+                      </td>
+                      <td style={{ padding: 6, fontSize: 10, maxWidth: 200, wordBreak: 'break-all' }}>{h.message || '-'}</td>
+                      <td style={{ padding: 6, textAlign: 'center', fontSize: 10 }}>
+                        {h.newStatus || '-'} / {h.newIsDisplayed !== undefined ? (h.newIsDisplayed ? '진열' : '숨김') : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              <button onClick={() => { addLog(`전체 로그 JSON 출력 (${historyLogs.length}건)`, 'info'); addLog(JSON.stringify(historyLogs, null, 2), 'info'); }}
+                style={{ padding: '6px 16px', background: '#6b7280', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                전체 JSON 로그에 출력
+              </button>
+            </div>
+          </div>
+        )}
+
+        {historyLogs.length === 0 && !isHistoryLoading && (
+          <div style={{ background: '#fef9c3', border: '1px solid #fde047', borderRadius: 6, padding: 12, fontSize: 12, color: '#854d0e' }}>
+            아직 조회된 실행 로그가 없습니다. 위 버튼을 클릭하여 Lambda HISTORY API를 호출하세요.
+          </div>
+        )}
+      </div>
 
       <div>
         <h3 style={{ fontSize: 14, marginBottom: 8 }}>요청 로그</h3>
