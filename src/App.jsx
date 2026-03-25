@@ -387,6 +387,8 @@ export default function App() {
   const [isProductSelectOpen, setIsProductSelectOpen] = useState(false);
   const [productFocusIndex, setProductFocusIndex] = useState(-1);
   const [recentProducts, setRecentProducts] = useState([]);
+  const [manualProductId, setManualProductId] = useState('');
+  const [isManualLoading, setIsManualLoading] = useState(false);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [pickerDate, setPickerDate] = useState(getCurrentLocalISOString().split('T')[0]);
   const [pickerTime, setPickerTime] = useState(getCurrentLocalISOString().split('T')[1]);
@@ -968,6 +970,22 @@ export default function App() {
     const newRecents = [product, ...recentProducts.filter(p => p.id !== product.id)].slice(0, 5);
     setRecentProducts(newRecents);
     localStorage.setItem('cand_recent_products', JSON.stringify(newRecents));
+  };
+
+  const handleAddProductById = async () => {
+    const id = manualProductId.trim();
+    if (!id) return showToast('상품 ID를 입력해주세요.', 'error');
+    if (scheduleForm.products.find(p => p.id === id)) return showToast('이미 추가된 상품입니다.', 'error');
+    setIsManualLoading(true);
+    try {
+      const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=products/${encodeURIComponent(id)}`, { headers: getAuthHeaders(token) });
+      if (!res.ok) throw new Error();
+      const product = await res.json();
+      handleSelectProduct({ id: product.id, name: product.name, price: product.price, status: product.status, isDisplayed: product.isDisplayed, type: product.type });
+      setManualProductId('');
+      showToast(`"${product.name}" 상품이 추가되었습니다.`, 'success');
+    } catch { showToast('상품을 찾을 수 없습니다. ID를 확인해주세요.', 'error'); }
+    setIsManualLoading(false);
   };
 
   const handleRemoveProduct = (productId) => {
@@ -1598,6 +1616,22 @@ export default function App() {
                             </div>
                           );
                         })()}
+                      </div>
+
+                      {/* 상품 ID 수동 입력 */}
+                      <div className="mt-2 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="상품 ID 직접 입력 (숨김 상품 등)"
+                          value={manualProductId}
+                          onChange={e => setManualProductId(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddProductById(); } }}
+                          className={glassInput + ' flex-1 text-xs'}
+                        />
+                        <button type="button" onClick={handleAddProductById} disabled={isManualLoading}
+                          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${isManualLoading ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-violet-500 text-white border-violet-400 shadow-md hover:bg-violet-600'}`}>
+                          {isManualLoading ? '조회중...' : 'ID로 추가'}
+                        </button>
                       </div>
 
                       {/* ⭐️ 글래스몰피즘 디자인이 완벽히 적용된 선택 상품 데이터 테이블 */}
