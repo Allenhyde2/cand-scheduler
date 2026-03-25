@@ -294,6 +294,8 @@ export default function App() {
   const [token, setToken] = useState('');
   const [communityId] = useState(DEFAULT_GROUP_ID);
   const [sellerId, setSellerId] = useState('');
+  const [sellerProfiles, setSellerProfiles] = useState([]); // [{id, name}] — 로그인한 사용자의 모든 CS: 프로필
+  const [activeSellerId, setActiveSellerId] = useState(''); // 헤더 드롭다운에서 선택된 프로필 ('' = 전체)
   const [loginMode, setLoginMode] = useState(() => localStorage.getItem('cand_login_mode') || sessionStorage.getItem('cand_login_mode') || 'seller');
   const [activeTab, setActiveTab] = useState('productList'); 
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
@@ -439,7 +441,7 @@ export default function App() {
     setConfirmDialog({ visible: false, message: '', onConfirm: null });
   };
 
-  const autoFetchSellerId = async (accessToken) => {
+  const autoFetchSellerIds = async (accessToken) => {
     try {
       const fetchOptions = {
         method: 'GET',
@@ -450,27 +452,25 @@ export default function App() {
         }
       };
 
-      // ⭐️ [버그 수정 1] API 문서에 존재하지 않는 '/users/me' 경로를 제거하고,
-      // 공식 엔드포인트인 '/me' 만 정확하게 호출하여 초기 403 에러를 차단합니다.
       const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=me`, fetchOptions);
       if (!res.ok) throw new Error("유저 프로필 정보를 가져오지 못했습니다.");
-      
+
       const data = await res.json();
-      let sellerProfileId = data.profiles?.find(p => p.profileId && p.profileId.startsWith('CS:'))?.profileId;
-      
-      if (!sellerProfileId && data.id) {
+      let sellerProfileIds = (data.profiles || []).filter(p => p.profileId && p.profileId.startsWith('CS:')).map(p => p.profileId);
+
+      if (sellerProfileIds.length === 0 && data.id) {
         const bulkRes = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=users/bulk`, {
           method: 'POST', headers: fetchOptions.headers, body: JSON.stringify({ ids: [data.id] })
         });
         if (bulkRes.ok) {
           const bulkData = await bulkRes.json();
           const userData = Array.isArray(bulkData) ? bulkData[0] : bulkData;
-          sellerProfileId = userData?.profiles?.find(p => p.profileId && p.profileId.startsWith('CS:'))?.profileId;
+          sellerProfileIds = (userData?.profiles || []).filter(p => p.profileId && p.profileId.startsWith('CS:')).map(p => p.profileId);
         }
       }
-      return sellerProfileId || null; 
+      return sellerProfileIds;
     } catch (err) {
-      return null;
+      return [];
     }
   };
 
@@ -522,19 +522,33 @@ export default function App() {
           if (savedLoginMode === 'admin') {
             finalSellerId = savedAdminTargetId || '';
           } else {
-            const autoId = await autoFetchSellerId(accessToken);
-            if (autoId) { finalSellerId = autoId; } 
-            else { showToast('셀러 ID 자동 탐지에 실패했습니다. 시스템 관리자에게 문의하세요.', 'warning'); }
+            const autoIds = await autoFetchSellerIds(accessToken);
+            if (autoIds.length > 0) {
+              finalSellerId = autoIds[0];
+              // 셀러 이름 조회 후 프로필 목록 세팅
+              const profiles = await Promise.all(autoIds.map(async (sid) => {
+                try {
+                  const r = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent('sellers/' + sid)}`, { method: 'GET', headers: { 'content-type': 'application/json', 'authorization': `Bearer ${accessToken}`, 'x-can-community-id': communityId } });
+                  if (r.ok) { const d = await r.json(); return { id: sid, name: d.name || sid }; }
+                } catch(e) {}
+                return { id: sid, name: sid };
+              }));
+              setSellerProfiles(profiles);
+              localStorage.setItem('cand_seller_profiles', JSON.stringify(profiles));
+            } else {
+              showToast('셀러 ID 자동 탐지에 실패했습니다. 시스템 관리자에게 문의하세요.', 'warning');
+            }
           }
-          
+
           setToken(accessToken);
           setSellerId(finalSellerId);
+          setActiveSellerId('');
           setLoginMode(savedLoginMode);
           setIsAuthenticated(true);
           localStorage.setItem('cand_token', accessToken);
           localStorage.setItem('cand_seller_id', finalSellerId);
           localStorage.setItem('cand_login_mode', savedLoginMode);
-          
+
           fetchProductsWithArgs(accessToken, finalSellerId, savedLoginMode, false);
           fetchScheduledTasks(accessToken);
           showToast('캔패스 로그인이 완료되었습니다.', 'success');
@@ -558,6 +572,7 @@ export default function App() {
           setSellerId(savedSellerId || '');
           setLoginMode(savedMode);
           setIsAuthenticated(true);
+          try { setSellerProfiles(JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]')); } catch(e) {}
           fetchProductsWithArgs(savedToken, savedSellerId, savedMode, false);
           fetchScheduledTasks(savedToken);
         }
@@ -596,10 +611,13 @@ export default function App() {
     localStorage.removeItem('cand_token');
     localStorage.removeItem('cand_seller_id');
     localStorage.removeItem('cand_login_mode');
+    localStorage.removeItem('cand_seller_profiles');
     setIsAuthenticated(false);
     setActiveTab('productList');
     setToken('');
     setSellerId('');
+    setSellerProfiles([]);
+    setActiveSellerId('');
     setProducts([]);
     setTasks([]);
     showToast('로그아웃 되었습니다.', 'success');
@@ -643,16 +661,14 @@ export default function App() {
       const activeToken = currentToken || token;
       if (!activeToken) throw new Error("유효한 토큰이 없습니다.");
 
-      // 공통 파라미터 빌드 (isDisplayed 제외)
-      const buildBaseParams = (cursor) => {
+      // 공통 파라미터 빌드
+      const buildBaseParams = (cursor, overrideSellerId) => {
         const p = new URLSearchParams();
         p.append('endpoint', 'products');
         p.append('limit', '50');
         p.append('order', 'DESC');
         if (cursor) p.append('after', cursor);
-        // 클라이언트 필터링이므로 API 파라미터 최소화 (전체 로드)
-        const searchSellerId = currentMode === 'seller' ? currentSellerId : currentSellerId;
-        if (searchSellerId) p.append('sellerId', searchSellerId);
+        if (overrideSellerId) p.append('sellerId', overrideSellerId);
         return p;
       };
 
@@ -666,12 +682,11 @@ export default function App() {
       };
 
       // 커서 반복 전체 로드 헬퍼
-      const fetchAllPages = async (extraParams) => {
+      const fetchAllPages = async (sid) => {
         let items = [], cursor = null;
         do {
           if (abortController.signal.aborted) return items;
-          const p = buildBaseParams(cursor);
-          if (extraParams) Object.entries(extraParams).forEach(([k, v]) => p.append(k, v));
+          const p = buildBaseParams(cursor, sid);
           const data = await doFetch(p);
           if (abortController.signal.aborted) return items;
           items = [...items, ...(data.data || [])];
@@ -680,23 +695,25 @@ export default function App() {
         return items;
       };
 
-      // 1차: 첫 50개 즉시 표시 (파라미터 없이)
-      const firstParams = buildBaseParams(null);
+      // seller 모드: 모든 CS: 프로필로 병렬 조회
+      const savedProfiles = (() => { try { return JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]'); } catch(e) { return []; } })();
+      const allSellerIds = currentMode === 'seller' && savedProfiles.length > 1
+        ? savedProfiles.map(p => p.id)
+        : currentSellerId ? [currentSellerId] : [null];
+
+      // 1차: 첫 번째 프로필로 50개 즉시 표시
+      const firstParams = buildBaseParams(null, allSellerIds[0]);
       const firstData = await doFetch(firstParams);
       if (abortController.signal.aborted) return;
       setProducts(firstData.data || []);
       setCurrentPage(1);
       setIsLoading(false);
 
-      // 2차 백그라운드: 3중 병렬 전체 로드 (진열중 + 숨김 + 필터없음)
+      // 2차 백그라운드: 모든 프로필 병렬 전체 로드
       setIsLoadingMore(true);
-      const [noFilter, displayed, hidden] = await Promise.all([
-        fetchAllPages(null),
-        fetchAllPages({ isDisplayed: 'true' }),
-        fetchAllPages({ isDisplayed: 'false' })
-      ]);
+      const results = await Promise.all(allSellerIds.map(sid => fetchAllPages(sid)));
       if (abortController.signal.aborted) return;
-      const merged = [...noFilter, ...displayed, ...hidden];
+      const merged = results.flat();
       const deduped = [...new Map(merged.map(p => [p.id, p])).values()];
       setProducts(deduped);
       setIsLoadingMore(false);
@@ -720,6 +737,8 @@ export default function App() {
       if (p.isDisplayed !== (filters.display === 'true')) return false;
     }
     if (filters.sellerId && p.sellerId !== filters.sellerId) return false;
+    // 헤더 셀러 프로필 드롭다운 필터
+    if (activeSellerId && p.sellerId !== activeSellerId) return false;
     return true;
   });
 
@@ -1187,7 +1206,16 @@ export default function App() {
               <h2 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight truncate">{activeTab === 'productList' ? '상품 보드' : activeTab === 'schedule' ? (scheduleSubTab === 'history' ? '실행 결과 로그' : '상태 예약 변경') : '환경 설정'}</h2>
             </div>
             <div className="flex items-center gap-2">
-              <span className="bg-white/60 border border-white/50 text-[10px] md:text-xs font-bold px-3 md:px-4 py-1.5 md:py-2.5 rounded-xl shadow-sm text-slate-600 truncate max-w-[120px]">ID: {sellerId || '미설정'}</span>
+              {loginMode === 'seller' && sellerProfiles.length > 1 ? (
+                <GlassSelect
+                  value={activeSellerId}
+                  options={[{ value: '', label: `전체 (${sellerProfiles.length}개 셀러)` }, ...sellerProfiles.map(p => ({ value: p.id, label: p.name || p.id }))]}
+                  onChange={(v) => { setActiveSellerId(v); setFilters(f => ({...f, sellerId: v ? '' : f.sellerId})); setCurrentPage(1); }}
+                  placeholder="셀러 선택"
+                />
+              ) : (
+                <span className="bg-white/60 border border-white/50 text-[10px] md:text-xs font-bold px-3 md:px-4 py-1.5 md:py-2.5 rounded-xl shadow-sm text-slate-600 truncate max-w-[160px]">{loginMode === 'seller' ? (sellerProfiles[0]?.name || sellerId || '미설정') : (sellerId || '미설정')}</span>
+              )}
               <span className={`text-[10px] md:text-xs font-bold px-3 md:px-4 py-1.5 md:py-2.5 rounded-xl shadow-sm border ${loginMode === 'admin' ? 'bg-purple-100 border-purple-200 text-purple-700' : 'bg-blue-100 border-blue-200 text-blue-700'}`}>{loginMode.toUpperCase()}</span>
             </div>
           </header>
@@ -1552,9 +1580,16 @@ export default function App() {
                   <h3 className="text-xl font-extrabold border-b border-white/50 pb-4 text-slate-800">Connection Settings</h3>
                   <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Login Mode</label><p className="font-bold text-blue-600 bg-white/50 px-4 py-2 rounded-xl border border-white/60 inline-block">{loginMode.toUpperCase()}</p></div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Active Seller ID (추출 정보)</label>
-                    <div className="font-extrabold text-slate-700 text-sm bg-white/50 px-4 py-3 rounded-2xl border border-white/60 shadow-sm font-mono">
-                      {sellerId || '미설정'}
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Seller Profiles ({sellerProfiles.length}개)</label>
+                    <div className="flex flex-col gap-1">
+                      {sellerProfiles.length > 0 ? sellerProfiles.map(p => (
+                        <div key={p.id} className="font-bold text-slate-700 text-sm bg-white/50 px-4 py-2.5 rounded-2xl border border-white/60 shadow-sm flex justify-between items-center">
+                          <span>{p.name || p.id}</span>
+                          <span className="text-[10px] font-mono text-slate-400">{p.id}</span>
+                        </div>
+                      )) : (
+                        <div className="font-bold text-slate-400 text-sm bg-white/50 px-4 py-3 rounded-2xl border border-white/60 shadow-sm">미설정</div>
+                      )}
                     </div>
                   </div>
                 </div>
