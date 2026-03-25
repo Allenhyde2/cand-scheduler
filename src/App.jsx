@@ -1561,7 +1561,7 @@ export default function App() {
                         <div className="py-20 text-center text-slate-400 font-bold">기록된 작업 실행 내역이 없습니다.</div>
                       ) : (
                         historyLogs
-                          .filter(log => loginMode === 'admin' ? true : (!log.sellerId || log.sellerId === sellerId))
+                          .filter(log => loginMode === 'admin' ? true : (log.sellerId && sellerProfiles.some(p => p.id === log.sellerId)))
                           .map((log, idx) => (
                           <div key={idx} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/80 transition-all">
                             <div>
