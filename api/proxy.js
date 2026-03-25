@@ -11,14 +11,16 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { endpoint, ...queryParams } = req.query;
+  const { endpoint, baseUrl, ...queryParams } = req.query;
 
   if (!endpoint) {
     return res.status(400).json({ error: 'Endpoint parameter is required' });
   }
 
-  // 실제 요청을 보낼 목적지 URL 조립 (https://api.cand.xyz/products)
-  const targetUrl = new URL(`https://api.cand.xyz/${endpoint}`);
+  // 실제 요청을 보낼 목적지 URL 조립 (기본: https://api.cand.xyz, baseUrl 지정 시 해당 URL 사용)
+  const allowedBaseUrls = ['https://api.cand.xyz', 'https://payment.moim.co'];
+  const resolvedBase = baseUrl && allowedBaseUrls.includes(baseUrl) ? baseUrl : 'https://api.cand.xyz';
+  const targetUrl = new URL(`${resolvedBase}/${endpoint}`);
 
   Object.keys(queryParams).forEach(key => {
     targetUrl.searchParams.append(key, queryParams[key]);

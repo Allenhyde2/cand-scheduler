@@ -922,19 +922,26 @@ export default function App() {
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
       
-      const endpointPath = `products/${encodeURIComponent(id)}`;
-      const url = `${BACKEND_API_URL}/api/proxy?endpoint=${endpointPath}`;
-
       const requestHeaders = getAuthHeaders(token);
-      // ⭐️ 권한 헤더 추가 (판매자/어드민으로서의 권한 증명)
       if (sellerId) {
         requestHeaders['x-can-profile-id'] = sellerId;
       }
 
+      // ⭐️ 서브셀러 상품은 seller admin API 사용
+      const parentSid = _original.parentSellerId;
+      let url, finalPayload;
+      if (parentSid) {
+        url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`admin/sellers/${parentSid}/products/${id}`)}&baseUrl=${encodeURIComponent('https://payment.moim.co')}`;
+        finalPayload = { product: payload };
+      } else {
+        url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`products/${id}`)}`;
+        finalPayload = payload;
+      }
+
       const res = await fetch(url, {
-        method: 'PUT', 
-        headers: requestHeaders, 
-        body: JSON.stringify(payload)
+        method: 'PUT',
+        headers: requestHeaders,
+        body: JSON.stringify(finalPayload)
       });
       
       if (!res.ok) {
@@ -1047,7 +1054,8 @@ export default function App() {
             action: 'CREATE', taskId: newTaskId, productId: prod.id, productName: prod.name,
             newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
             executeAt: new Date(confirmedDateTime).toISOString(), token, communityId,
-            sellerId: sellerId || ''
+            sellerId: sellerId || '',
+            parentSellerId: prod.parentSellerId || ''
           })
         });
         if (!res.ok) throw new Error();
@@ -1055,7 +1063,7 @@ export default function App() {
           id: newTaskId, productId: prod.id, productName: prod.name,
           newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
           executeAt: new Date(confirmedDateTime).getTime(), status: 'cloud_scheduled',
-          sellerId: sellerId || '',
+          sellerId: sellerId || '', parentSellerId: prod.parentSellerId || '',
           logs: ['✅ AWS EventBridge에 성공적으로 등록되었습니다.']
         });
       }));
@@ -1098,7 +1106,7 @@ export default function App() {
       showToast('수정 중...', 'info');
       const response = await fetch(SCHEDULER_API_URL, {
         method: 'POST', headers: getAuthHeaders(token), 
-        body: JSON.stringify({ action: 'UPDATE', taskId: editModal.task.id, productId: editModal.task.productId, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: executeTimeIso, token, communityId })
+        body: JSON.stringify({ action: 'UPDATE', taskId: editModal.task.id, productId: editModal.task.productId, productName: editModal.task.productName, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: executeTimeIso, token, communityId, sellerId: editModal.task.sellerId || sellerId || '', parentSellerId: editModal.task.parentSellerId || '' })
       });
       if (!response.ok) throw new Error();
       setTasks(prev => prev.map(t => t.id === editModal.task.id ? { ...t, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: new Date(`${editModal.date}T${editModal.time}`).getTime() } : t)); 
