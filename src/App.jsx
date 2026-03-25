@@ -371,7 +371,7 @@ export default function App() {
   const [tasks, setTasks] = useState([]);
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [filters, setFilters] = useState({ name: '', status: [], display: 'all', sellerId: '' });
+  const [filters, setFilters] = useState({ name: '', status: [], display: 'all', sellerId: '', type: [] });
   const [pagingAfter, setPagingAfter] = useState(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -802,6 +802,7 @@ export default function App() {
       if (p.isDisplayed !== (filters.display === 'true')) return false;
     }
     if (filters.sellerId && p.sellerId !== filters.sellerId) return false;
+    if (filters.type.length > 0 && !filters.type.includes(p.type)) return false;
     // 헤더 셀러 프로필 드롭다운 필터
     if (activeSellerId && p.sellerId !== activeSellerId) return false;
     return true;
@@ -846,7 +847,7 @@ export default function App() {
     return pages;
   };
 
-  const resetFilters = () => { setFilters({ name: '', status: [], display: 'all', sellerId: '' }); setCurrentPage(1); };
+  const resetFilters = () => { setFilters({ name: '', status: [], display: 'all', sellerId: '', type: [] }); setCurrentPage(1); };
   const applyFilters = () => { setCurrentPage(1); }; // 클라이언트 필터링 — filteredProducts가 자동 반영
   const fetchProducts = () => { setCurrentPage(1); fetchProductsWithArgs(token, sellerId, loginMode); };
 
@@ -1319,8 +1320,30 @@ export default function App() {
                       <label className="block text-[10px] font-bold text-slate-400 mb-1">상품 이름</label>
                       <input type="text" value={filters.name} onChange={e => { setFilters({...filters, name: e.target.value}); setCurrentPage(1); }} placeholder="상품명 검색..." className={glassInput} />
                     </div>
-                    {/* 2행: 진열 상태 + 판매 상태 태그 (같은 줄) */}
+                    {/* 2행: 상품 유형 + 진열 상태 + 판매 상태 태그 (같은 줄) */}
                     <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-3">
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 mb-1.5">상품 유형</label>
+                        <div className="flex gap-1.5">
+                          {[{ value: 'normal', label: '일반' }, { value: 'fund', label: '펀딩' }, { value: 'subscription', label: '구독' }].map(opt => {
+                            const isChecked = filters.type.includes(opt.value);
+                            return (
+                              <button key={opt.value} type="button"
+                                onClick={() => {
+                                  const next = isChecked ? filters.type.filter(t => t !== opt.value) : [...filters.type, opt.value];
+                                  setFilters({...filters, type: next}); setCurrentPage(1);
+                                }}
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
+                                  isChecked
+                                    ? 'bg-violet-500 text-white border-violet-400 shadow-md'
+                                    : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
+                                }`}>
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-400 mb-1.5">진열 상태</label>
                         <div className="flex gap-1.5">
@@ -1407,6 +1430,7 @@ export default function App() {
                           <button onClick={() => openProductEditModal(p)} className="shrink-0 self-start text-[11px] font-bold text-blue-600 bg-white/60 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 transition-all">수정</button>
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({normal:'bg-slate-400/15 text-slate-500 border-slate-300/50',fund:'bg-violet-500/15 text-violet-600 border-violet-300/50',subscription:'bg-teal-500/15 text-teal-600 border-teal-300/50'})[p.type] || 'bg-slate-400/15 text-slate-400 border-slate-300/50'}`}>{({normal:'일반',fund:'펀딩',subscription:'구독'})[p.type] || p.type || '-'}</span>
                           <span className="text-xs font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</span>
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50' : 'bg-slate-400/15 text-slate-500 border-slate-300/50'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
                           <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({scheduled:'bg-amber-500/15 text-amber-600 border-amber-300/50',onSale:'bg-blue-500/15 text-blue-600 border-blue-300/50',soldOut:'bg-red-500/15 text-red-500 border-red-300/50',completed:'bg-slate-400/15 text-slate-400 border-slate-300/50'})[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
@@ -1417,11 +1441,14 @@ export default function App() {
                   {/* 데스크톱 테이블 뷰 */}
                   <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
                     <thead className="bg-white/40 backdrop-blur-md border-b border-white/40 text-slate-500 sticky top-0 z-10">
-                      <tr><th className="pl-6 pr-2 py-4 w-[52px]"></th><th className="px-4 py-4">상품 정보</th><th className="px-4 py-4">판매자</th><th className="px-4 py-4 text-right">가격</th><th className="px-4 py-4 text-center">진열</th><th className="px-4 py-4 text-center">상태</th><th className="px-4 py-4 text-center">관리</th></tr>
+                      <tr><th className="px-4 py-4 text-center w-[60px]">유형</th><th className="pl-6 pr-2 py-4 w-[52px]"></th><th className="px-4 py-4">상품 정보</th><th className="px-4 py-4">판매자</th><th className="px-4 py-4 text-right">가격</th><th className="px-4 py-4 text-center">진열</th><th className="px-4 py-4 text-center">상태</th><th className="px-4 py-4 text-center">관리</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/40">
                       {displayedProducts.map(p => (
                         <tr key={p.id} className="hover:bg-white/40 transition-colors group">
+                          <td className="px-4 py-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({normal:'bg-slate-400/15 text-slate-500 border-slate-300/50',fund:'bg-violet-500/15 text-violet-600 border-violet-300/50',subscription:'bg-teal-500/15 text-teal-600 border-teal-300/50'})[p.type] || 'bg-slate-400/15 text-slate-400 border-slate-300/50'}`}>{({normal:'일반',fund:'펀딩',subscription:'구독'})[p.type] || p.type || '-'}</span>
+                          </td>
                           <td className="pl-6 pr-2 py-3">
                             <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-white/60 shrink-0">
                               {p.images?.mobile?.[0]?.url ? <img src={p.images.mobile[0].url} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-sm">📦</div>}
