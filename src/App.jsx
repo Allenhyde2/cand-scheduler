@@ -618,6 +618,7 @@ export default function App() {
 
           fetchProductsWithArgs(accessToken, finalSellerId, savedLoginMode, false);
           fetchScheduledTasks(accessToken);
+          fetchHistoryLogs(accessToken);
           showToast('캔패스 로그인이 완료되었습니다.', 'success');
         } catch (err) {
           showToast(`로그인 처리 중 오류 발생: ${err.message}`, 'error');
@@ -642,6 +643,7 @@ export default function App() {
           try { setSellerProfiles(JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]')); } catch(e) {}
           fetchProductsWithArgs(savedToken, savedSellerId, savedMode, false);
           fetchScheduledTasks(savedToken);
+          fetchHistoryLogs(savedToken);
         }
         if (savedRecentProducts) {
           try { setRecentProducts(JSON.parse(savedRecentProducts)); } catch(e) {}
