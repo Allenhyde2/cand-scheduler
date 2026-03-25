@@ -91,6 +91,70 @@ function GlassSelect({ value, options, onChange, placeholder = "선택해주세�
   );
 }
 
+// --- 검색 가능한 글래스몰피즘 Select ---
+function SearchableGlassSelect({ value, options, onChange, placeholder = "선택해주세요" }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) { setIsOpen(false); setSearch(''); }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) inputRef.current.focus();
+  }, [isOpen]);
+
+  const selectedLabel = options.find(o => o.value === value)?.label || placeholder;
+  const filtered = search ? options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()) || o.value.toLowerCase().includes(search.toLowerCase())) : options;
+
+  return (
+    <div className="relative w-full" ref={ref}>
+      <div
+        onClick={() => { setIsOpen(!isOpen); setSearch(''); }}
+        className="w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl cursor-pointer hover:bg-white/70 active:bg-white/40 active:scale-[0.99] active:shadow-inner transition-all text-sm font-bold text-slate-700 shadow-sm flex justify-between items-center group"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <svg className={`w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
+      </div>
+
+      <div className={`absolute left-0 right-0 top-full mt-1 z-[200] transition-all duration-300 ease-out origin-top ${isOpen ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0 pointer-events-none'}`}>
+        <div className="bg-white/95 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-2xl overflow-hidden">
+          <div className="p-2 border-b border-white/50">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="검색..."
+              className="w-full px-3 py-2 bg-white/60 border border-white/60 rounded-xl text-sm font-bold text-slate-700 placeholder-slate-400 outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200 transition-all"
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+          <div className="p-1.5 max-h-52 overflow-y-auto custom-scrollbar">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-3 text-sm text-slate-400 font-bold text-center">검색 결과 없음</div>
+            ) : filtered.map((opt) => (
+              <div
+                key={opt.value}
+                onClick={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
+                className={`px-3 py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all active:scale-[0.97] ${value === opt.value ? 'bg-blue-600 text-white shadow-md active:bg-blue-800' : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100'}`}
+              >
+                {opt.label}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- 커스텀 Date/Time Picker ---
 // --- 스크롤 휠 피커 컴포넌트 ---
 function ScrollWheelPicker({ values, selected, onChange, suffix = '' }) {
@@ -1277,12 +1341,12 @@ export default function App() {
                         </div>
                       </div>
                     </div>
-                    {/* 3행: 서브셀러 + 초기화 */}
+                    {/* 3행: 판매자 선택 + 초기화 */}
                     <div className="mt-3 flex items-end gap-4">
                       {uniqueSellers.length > 0 && (
                         <div className="flex-1 min-w-0">
-                          <label className="block text-[10px] font-bold text-slate-400 mb-1">서브셀러</label>
-                          <GlassSelect value={filters.sellerId} onChange={v => { setFilters({...filters, sellerId: v}); setCurrentPage(1); }} options={[{ value: '', label: '전체' }, ...uniqueSellers.map(s => ({ value: s.id, label: s.name }))]} />
+                          <label className="block text-[10px] font-bold text-slate-400 mb-1">판매자 선택</label>
+                          <SearchableGlassSelect value={filters.sellerId} onChange={v => { setFilters({...filters, sellerId: v}); setCurrentPage(1); }} options={[{ value: '', label: '전체' }, ...uniqueSellers.map(s => ({ value: s.id, label: s.name }))]} />
                         </div>
                       )}
                       <button onClick={resetFilters} className="shrink-0 text-xs font-bold text-slate-500 hover:text-slate-700 active:text-slate-900 active:scale-95 transition-all pb-2">초기화</button>
