@@ -1050,7 +1050,8 @@ export default function App() {
           body: JSON.stringify({
             action: 'CREATE', taskId: newTaskId, productId: prod.id, productName: prod.name,
             newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
-            executeAt: new Date(confirmedDateTime).toISOString(), token, communityId
+            executeAt: new Date(confirmedDateTime).toISOString(), token, communityId,
+            sellerId: sellerId || ''
           })
         });
         if (!res.ok) throw new Error();
@@ -1559,7 +1560,9 @@ export default function App() {
                       ) : historyLogs.length === 0 ? (
                         <div className="py-20 text-center text-slate-400 font-bold">기록된 작업 실행 내역이 없습니다.</div>
                       ) : (
-                        historyLogs.map((log, idx) => (
+                        historyLogs
+                          .filter(log => loginMode === 'admin' ? true : (!log.sellerId || log.sellerId === sellerId))
+                          .map((log, idx) => (
                           <div key={idx} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/80 transition-all">
                             <div>
                               <div className="flex items-center gap-2 mb-1">
@@ -1567,6 +1570,9 @@ export default function App() {
                                   {log.success ? '성공' : '에러'}
                                 </span>
                                 <span className="font-extrabold text-sm md:text-base text-slate-800">{log.productName || '알 수 없는 상품'}</span>
+                                {loginMode === 'admin' && log.sellerId && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600 border border-purple-200">{sellerNames[log.sellerId] || log.sellerId}</span>
+                                )}
                               </div>
                               <p className="text-[10px] text-slate-500 font-mono">
                                 {log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}
