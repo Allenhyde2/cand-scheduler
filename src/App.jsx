@@ -161,14 +161,20 @@ function TimeInputPicker({ value, onChange, min = 0, max = 23, suffix = '' }) {
   const [isEditing, setIsEditing] = useState(false);
   const [inputVal, setInputVal] = useState(value);
   const inputRef = useRef(null);
+  const dialRef = useRef(null);
 
   useEffect(() => { setInputVal(value); }, [value]);
   useEffect(() => { if (isEditing && inputRef.current) { inputRef.current.select(); } }, [isEditing]);
 
+  const wrap = (num) => {
+    if (num > max) return min;
+    if (num < min) return max;
+    return num;
+  };
+
   const nudge = (dir) => {
-    const num = parseInt(value, 10) + dir;
-    const clamped = Math.max(min, Math.min(max, num));
-    onChange(String(clamped).padStart(2, '0'));
+    const num = wrap(parseInt(value, 10) + dir);
+    onChange(String(num).padStart(2, '0'));
   };
 
   const commitInput = () => {
@@ -181,12 +187,31 @@ function TimeInputPicker({ value, onChange, min = 0, max = 23, suffix = '' }) {
     setIsEditing(false);
   };
 
+  const handleWheel = (e) => {
+    e.preventDefault();
+    nudge(e.deltaY < 0 ? 1 : -1);
+  };
+
+  useEffect(() => {
+    const el = dialRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  });
+
+  const current = parseInt(value, 10);
+  const prevVal = String(wrap(current - 1)).padStart(2, '0');
+  const nextVal = String(wrap(current + 1)).padStart(2, '0');
+
   return (
-    <div className="flex flex-col items-center gap-1">
-      <button type="button" onClick={() => nudge(1)} className="w-12 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 active:bg-blue-100 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/></svg>
+    <div ref={dialRef} className="flex flex-col items-center w-16 select-none">
+      {/* 다음 값 (위) */}
+      <button type="button" onClick={() => nudge(1)}
+        className="w-full h-8 flex items-center justify-center text-xs font-bold text-slate-300 hover:text-blue-400 transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95">
+        {nextVal}<span className="text-[8px] ml-0.5">{suffix}</span>
       </button>
-      <div className="relative w-16 h-12 flex items-center justify-center bg-blue-50/50 border-2 border-blue-300/40 rounded-xl">
+      {/* 현재 값 (중앙) */}
+      <div className="relative w-full h-12 flex items-center justify-center bg-blue-50/60 border-2 border-blue-300/40 rounded-xl shadow-sm">
         {isEditing ? (
           <input
             ref={inputRef}
@@ -197,16 +222,18 @@ function TimeInputPicker({ value, onChange, min = 0, max = 23, suffix = '' }) {
             onChange={e => setInputVal(e.target.value.replace(/\D/g, ''))}
             onBlur={commitInput}
             onKeyDown={e => { if (e.key === 'Enter') commitInput(); if (e.key === 'Escape') { setInputVal(value); setIsEditing(false); } }}
-            className="w-full h-full text-center text-lg font-extrabold text-blue-600 bg-transparent outline-none"
+            className="w-full h-full text-center text-xl font-extrabold text-blue-600 bg-transparent outline-none"
           />
         ) : (
-          <button type="button" onClick={() => setIsEditing(true)} className="w-full h-full flex items-center justify-center text-lg font-extrabold text-blue-600 hover:text-blue-700 cursor-text">
-            {value}<span className="text-xs text-blue-400 ml-0.5 font-bold">{suffix}</span>
+          <button type="button" onClick={() => setIsEditing(true)} className="w-full h-full flex items-center justify-center text-xl font-extrabold text-blue-600 hover:text-blue-700 cursor-text transition-all">
+            {value}<span className="text-[10px] text-blue-400 ml-0.5 font-bold">{suffix}</span>
           </button>
         )}
       </div>
-      <button type="button" onClick={() => nudge(-1)} className="w-12 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 active:bg-blue-100 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/></svg>
+      {/* 이전 값 (아래) */}
+      <button type="button" onClick={() => nudge(-1)}
+        className="w-full h-8 flex items-center justify-center text-xs font-bold text-slate-300 hover:text-blue-400 transition-all duration-200 cursor-pointer hover:scale-110 active:scale-95">
+        {prevVal}<span className="text-[8px] ml-0.5">{suffix}</span>
       </button>
     </div>
   );
