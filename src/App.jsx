@@ -1234,7 +1234,7 @@ export default function App() {
               onClick={() => {setActiveTab('productList'); if(window.innerWidth < 768) setIsSidebarOpen(false);}} 
               className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'productList' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
             >
-              상품 현황 보드
+              상품 관리
             </button>
             <button 
               data-active={activeTab === 'schedule'} 
@@ -1267,7 +1267,7 @@ export default function App() {
           <header className={`${glassPanel} p-3 md:p-4 px-4 md:px-6 flex items-center justify-between shrink-0 min-h-[4rem] md:h-20 relative z-30`}>
             <div className="flex items-center gap-3 md:gap-4 w-full md:w-auto">
               <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="shrink-0 w-9 h-9 md:w-10 md:h-10 flex items-center justify-center bg-white/50 hover:bg-white active:bg-white/40 active:scale-90 active:shadow-inner rounded-xl shadow-sm text-slate-600 transition-all">≡</button>
-              <h2 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight truncate">{activeTab === 'productList' ? '상품 보드' : activeTab === 'schedule' ? (scheduleSubTab === 'history' ? '실행 결과 로그' : '상태 예약 변경') : '환경 설정'}</h2>
+              <h2 className="text-lg md:text-xl font-extrabold text-slate-800 tracking-tight truncate">{activeTab === 'productList' ? '상품 관리' : activeTab === 'schedule' ? (scheduleSubTab === 'history' ? '실행 결과 로그' : '상태 예약 변경') : '환경 설정'}</h2>
             </div>
             <div className="flex items-center gap-2">
               {loginMode === 'seller' && sellerProfiles.length > 1 ? (
