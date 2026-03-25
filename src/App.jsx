@@ -972,12 +972,12 @@ export default function App() {
     setScheduleForm({ ...scheduleForm, products: scheduleForm.products.filter(p => p.id !== productId) });
   };
 
+  const productSearchResults = productSearchTerm.trim()
+    ? products.filter(p => (p.name || '').toLowerCase().includes(productSearchTerm.toLowerCase()) || p.id.toLowerCase().includes(productSearchTerm.toLowerCase()))
+    : products;
+
   const handleProductKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const matched = products.filter(p => p.name.includes(productSearchTerm) || p.id.includes(productSearchTerm));
-      if (matched.length > 0) handleSelectProduct(matched[0]);
-    }
+    if (e.key === 'Escape') { setIsProductSelectOpen(false); }
   };
 
   const handleConfirmDatePicker = (selectedD, selectedT) => {
@@ -1533,16 +1533,23 @@ export default function App() {
                           onKeyDown={handleProductKeyDown} 
                           className={glassInput} 
                         />
-                        {isProductSelectOpen && (
-                          <div className="absolute left-0 right-0 top-full mt-1.5 bg-white/90 backdrop-blur-2xl border border-white/60 shadow-xl rounded-2xl z-[70] max-h-56 overflow-y-auto p-2 animate-fade-in-fast">
-                            {filteredProducts.map(p => (
-                              <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-blue-50 active:bg-blue-100 active:scale-[0.98] transition-all mb-1 flex justify-between items-center">
-                                <span className="font-bold text-slate-700 truncate">{p.name}</span>
-                                <span className="text-[9px] text-slate-400 font-mono shrink-0">{p.id}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                        {isProductSelectOpen && (() => {
+                          const selectedIds = new Set(scheduleForm.products.map(p => p.id));
+                          const available = productSearchResults.filter(p => !selectedIds.has(p.id));
+                          return (
+                            <div className="absolute left-0 right-0 top-full mt-1.5 bg-white/90 backdrop-blur-2xl border border-white/60 shadow-xl rounded-2xl z-[70] max-h-56 overflow-y-auto p-2 animate-fade-in-fast">
+                              {available.length === 0 ? (
+                                <div className="px-3 py-4 text-sm text-slate-400 font-bold text-center">{productSearchTerm ? '검색 결과 없음' : '선택 가능한 상품 없음'}</div>
+                              ) : available.slice(0, 50).map(p => (
+                                <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-blue-50 active:bg-blue-100 active:scale-[0.98] transition-all mb-1 flex justify-between items-center gap-2">
+                                  <span className="font-bold text-slate-700 truncate">{p.name}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono shrink-0">{p.id}</span>
+                                </button>
+                              ))}
+                              {available.length > 50 && <div className="px-3 py-2 text-[10px] text-slate-400 font-bold text-center">외 {available.length - 50}개 — 검색어를 입력하세요</div>}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* ⭐️ 글래스몰피즘 디자인이 완벽히 적용된 선택 상품 데이터 테이블 */}
