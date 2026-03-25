@@ -983,7 +983,12 @@ export default function App() {
       const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=products/${encodeURIComponent(id)}`, { headers: getAuthHeaders(token) });
       if (!res.ok) throw new Error();
       const product = await res.json();
-      handleSelectProduct({ id: product.id, name: product.name, price: product.price, status: product.status, isDisplayed: product.isDisplayed, type: product.type });
+      // 셀러 모드: 본인 sellerProfile에 속하는 상품만 추가 허용
+      if (loginMode === 'seller' && product.sellerId && !sellerProfiles.some(p => p.id === product.sellerId)) {
+        setIsManualLoading(false);
+        return showToast('본인 소유의 상품만 예약할 수 있습니다.', 'error');
+      }
+      handleSelectProduct({ id: product.id, name: product.name, price: product.price, status: product.status, isDisplayed: product.isDisplayed, type: product.type, sellerId: product.sellerId });
       setManualProductId('');
       showToast(`"${product.name}" 상품이 추가되었습니다.`, 'success');
     } catch { showToast('상품을 찾을 수 없습니다. ID를 확인해주세요.', 'error'); }
@@ -1058,7 +1063,8 @@ export default function App() {
         newTasks.push({
           id: newTaskId, productId: prod.id, productName: prod.name,
           newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
-          executeAt: new Date(confirmedDateTime).getTime(), status: 'cloud_scheduled', 
+          executeAt: new Date(confirmedDateTime).getTime(), status: 'cloud_scheduled',
+          sellerId: sellerId || '',
           logs: ['✅ AWS EventBridge에 성공적으로 등록되었습니다.']
         });
       }));
@@ -1111,7 +1117,9 @@ export default function App() {
   };
 
   const translateStatus = (status) => ({ scheduled: '판매예정', onSale: '판매중', soldOut: '품절', completed: '판매종료' }[status] || status);
-  const displayedTasks = tasks.filter(task => products.some(p => p.id === task.productId));
+  const displayedTasks = loginMode === 'admin'
+    ? tasks
+    : tasks.filter(task => products.some(p => p.id === task.productId) || (task.sellerId && sellerProfiles.some(p => p.id === task.sellerId)));
   const glassPanel = "bg-white/60 backdrop-blur-xl border border-white/50 shadow-sm rounded-3xl";
   const glassInput = "w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl focus:bg-white focus:border-blue-400 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 shadow-sm placeholder-slate-400";
   const glassButtonPrimary = `w-full py-3.5 font-bold rounded-2xl shadow-lg transition-all ${colorVariants.blue}`;
