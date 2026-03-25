@@ -157,81 +157,55 @@ function SearchableGlassSelect({ value, options, onChange, placeholder = "선택
 
 // --- 커스텀 Date/Time Picker ---
 // --- 스크롤 휠 피커 컴포넌트 ---
-function ScrollWheelPicker({ values, selected, onChange, suffix = '' }) {
-  const containerRef = useRef(null);
-  const ITEM_HEIGHT = 40;
-  const VISIBLE_ITEMS = 5;
-  const isScrollingRef = useRef(false);
+function TimeInputPicker({ value, onChange, min = 0, max = 23, suffix = '' }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [inputVal, setInputVal] = useState(value);
+  const inputRef = useRef(null);
 
-  const selectedIndex = values.indexOf(selected);
-
-  useEffect(() => {
-    if (containerRef.current && !isScrollingRef.current) {
-      const idx = values.indexOf(selected);
-      if (idx >= 0) {
-        containerRef.current.scrollTop = idx * ITEM_HEIGHT;
-      }
-    }
-  }, [selected, values]);
-
-  const handleScroll = () => {
-    if (!containerRef.current) return;
-    isScrollingRef.current = true;
-    clearTimeout(containerRef.current._scrollTimer);
-    containerRef.current._scrollTimer = setTimeout(() => {
-      if (!containerRef.current) return;
-      const index = Math.round(containerRef.current.scrollTop / ITEM_HEIGHT);
-      const clamped = Math.max(0, Math.min(values.length - 1, index));
-      containerRef.current.scrollTo({ top: clamped * ITEM_HEIGHT, behavior: 'smooth' });
-      if (values[clamped] !== selected) onChange(values[clamped]);
-      isScrollingRef.current = false;
-    }, 80);
-  };
+  useEffect(() => { setInputVal(value); }, [value]);
+  useEffect(() => { if (isEditing && inputRef.current) { inputRef.current.select(); } }, [isEditing]);
 
   const nudge = (dir) => {
-    const idx = values.indexOf(selected);
-    const next = Math.max(0, Math.min(values.length - 1, idx + dir));
-    onChange(values[next]);
+    const num = parseInt(value, 10) + dir;
+    const clamped = Math.max(min, Math.min(max, num));
+    onChange(String(clamped).padStart(2, '0'));
+  };
+
+  const commitInput = () => {
+    const num = parseInt(inputVal, 10);
+    if (!isNaN(num) && num >= min && num <= max) {
+      onChange(String(num).padStart(2, '0'));
+    } else {
+      setInputVal(value);
+    }
+    setIsEditing(false);
   };
 
   return (
     <div className="flex flex-col items-center gap-1">
-      <button type="button" onClick={() => nudge(-1)} className="w-10 h-6 flex items-center justify-center rounded-lg hover:bg-white/60 active:bg-white/40 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
+      <button type="button" onClick={() => nudge(1)} className="w-12 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 active:bg-blue-100 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 15l7-7 7 7"/></svg>
       </button>
-      <div className="relative overflow-hidden" style={{ height: VISIBLE_ITEMS * ITEM_HEIGHT }}>
-        <div className="absolute inset-x-0 top-0 h-[40%] bg-gradient-to-b from-white/95 to-transparent z-10 pointer-events-none" />
-        <div className="absolute inset-x-0 bottom-0 h-[40%] bg-gradient-to-t from-white/95 to-transparent z-10 pointer-events-none" />
-        <div className="absolute inset-x-1 z-10 pointer-events-none border-y-2 border-blue-400/30 rounded-lg bg-blue-50/30" style={{ top: 2 * ITEM_HEIGHT, height: ITEM_HEIGHT }} />
-        <div
-          ref={containerRef}
-          onScroll={handleScroll}
-          className="h-full overflow-y-auto custom-scrollbar"
-          style={{ scrollSnapType: 'y mandatory', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
-        >
-          <style dangerouslySetInnerHTML={{__html: `[data-wheel-scroll]::-webkit-scrollbar { display: none; }`}} />
-          <div style={{ height: 2 * ITEM_HEIGHT }} />
-          {values.map((v, i) => {
-            const dist = Math.abs(i - selectedIndex);
-            return (
-              <div
-                key={v}
-                onClick={() => onChange(v)}
-                style={{ height: ITEM_HEIGHT, scrollSnapAlign: 'start' }}
-                className={`flex items-center justify-center cursor-pointer select-none transition-all duration-200 ${
-                  dist === 0 ? 'text-blue-600 font-extrabold text-lg scale-110' :
-                  dist === 1 ? 'text-slate-500 font-bold text-sm opacity-60' :
-                  'text-slate-300 font-medium text-xs opacity-30'
-                }`}
-              >
-                {v}{suffix}
-              </div>
-            );
-          })}
-          <div style={{ height: 2 * ITEM_HEIGHT }} />
-        </div>
+      <div className="relative w-16 h-12 flex items-center justify-center bg-blue-50/50 border-2 border-blue-300/40 rounded-xl">
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            type="text"
+            inputMode="numeric"
+            maxLength={2}
+            value={inputVal}
+            onChange={e => setInputVal(e.target.value.replace(/\D/g, ''))}
+            onBlur={commitInput}
+            onKeyDown={e => { if (e.key === 'Enter') commitInput(); if (e.key === 'Escape') { setInputVal(value); setIsEditing(false); } }}
+            className="w-full h-full text-center text-lg font-extrabold text-blue-600 bg-transparent outline-none"
+          />
+        ) : (
+          <button type="button" onClick={() => setIsEditing(true)} className="w-full h-full flex items-center justify-center text-lg font-extrabold text-blue-600 hover:text-blue-700 cursor-text">
+            {value}<span className="text-xs text-blue-400 ml-0.5 font-bold">{suffix}</span>
+          </button>
+        )}
       </div>
-      <button type="button" onClick={() => nudge(1)} className="w-10 h-6 flex items-center justify-center rounded-lg hover:bg-white/60 active:bg-white/40 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
+      <button type="button" onClick={() => nudge(-1)} className="w-12 h-7 flex items-center justify-center rounded-lg hover:bg-blue-50 active:bg-blue-100 active:scale-90 text-slate-400 hover:text-blue-500 transition-all">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"/></svg>
       </button>
     </div>
@@ -270,7 +244,7 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
   };
 
   return (
-    <div className="bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.3)] rounded-3xl p-6 w-[320px] max-w-[90vw] animate-fade-in-fast">
+    <div className="bg-white/95 backdrop-blur-2xl border border-white/60 shadow-[0_20px_50px_-10px_rgba(0,0,0,0.3)] rounded-3xl p-6 w-[320px] max-w-[90vw] max-h-[85vh] overflow-y-auto animate-fade-in-fast">
       <div className="flex justify-between items-center mb-5">
         <button onClick={prevMonth} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 active:bg-slate-200 active:scale-90 text-slate-600 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 19l-7-7 7-7"></path></svg></button>
         <span className="font-extrabold text-slate-800 text-sm">{currentMonth.getFullYear()}년 {currentMonth.getMonth() + 1}월</span>
@@ -312,26 +286,16 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
         })}
       </div>
 
-      <div className="border-t border-slate-200/50 pt-5 mb-6">
-        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">시간 설정</label>
-        <div className="flex items-center justify-center gap-2">
-          <ScrollWheelPicker
-            values={Array.from({length: 24}, (_, i) => String(i).padStart(2, '0'))}
-            selected={hour}
-            onChange={setHour}
-            suffix="시"
-          />
-          <span className="font-extrabold text-slate-400 text-xl mt-1">:</span>
-          <ScrollWheelPicker
-            values={Array.from({length: 60}, (_, i) => String(i).padStart(2, '0'))}
-            selected={minute}
-            onChange={setMinute}
-            suffix="분"
-          />
+      <div className="border-t border-slate-200/50 pt-4 mb-4">
+        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">시간 설정</label>
+        <div className="flex items-center justify-center gap-3">
+          <TimeInputPicker value={hour} onChange={setHour} min={0} max={23} suffix="시" />
+          <span className="font-extrabold text-slate-400 text-2xl">:</span>
+          <TimeInputPicker value={minute} onChange={setMinute} min={0} max={59} suffix="분" />
         </div>
       </div>
 
-      <div className="flex gap-2 justify-end">
+      <div className="flex gap-2 justify-end sticky bottom-0 bg-white/95 pt-3 -mb-1">
         <button type="button" onClick={onCancel} className="px-5 py-2.5 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-sm">취소</button>
         <button type="button" onClick={handleConfirm} className={`px-6 py-2.5 text-sm font-bold rounded-xl transition-all ${colorVariants.blue}`}>적용하기</button>
       </div>
@@ -1704,7 +1668,7 @@ export default function App() {
                     </div>
                     <div className="relative z-[40]">
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">4. 실행 일시</label>
-                      <div onClick={() => setIsDatePickerOpen(true)} className={glassInput + " cursor-pointer flex justify-between items-center group"}>
+                      <div onClick={() => { const now = getCurrentLocalISOString(); setPickerDate(now.split('T')[0]); setPickerTime(now.split('T')[1]); setIsDatePickerOpen(true); }} className={glassInput + " cursor-pointer flex justify-between items-center group"}>
                         <span className={confirmedDateTime ? 'text-slate-800 font-extrabold' : 'text-slate-400'}>{confirmedDateTime ? new Date(confirmedDateTime).toLocaleString() : '클릭하여 일시 선택'}</span>
                         <span className="text-slate-400 group-hover:text-blue-500 transition-colors">📅</span>
                       </div>
