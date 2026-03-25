@@ -385,6 +385,7 @@ export default function App() {
   const [scheduleForm, setScheduleForm] = useState({ products: [], status: 'onSale', isDisplayed: 'true' });
   const [productSearchTerm, setProductSearchTerm] = useState('');
   const [isProductSelectOpen, setIsProductSelectOpen] = useState(false);
+  const [productFocusIndex, setProductFocusIndex] = useState(-1);
   const [recentProducts, setRecentProducts] = useState([]);
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
   const [pickerDate, setPickerDate] = useState(getCurrentLocalISOString().split('T')[0]);
@@ -977,7 +978,25 @@ export default function App() {
     : products;
 
   const handleProductKeyDown = (e) => {
-    if (e.key === 'Escape') { setIsProductSelectOpen(false); }
+    const selectedIds = new Set(scheduleForm.products.map(p => p.id));
+    const available = productSearchResults.filter(p => !selectedIds.has(p.id)).slice(0, 50);
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!isProductSelectOpen) setIsProductSelectOpen(true);
+      setProductFocusIndex(prev => Math.min(prev + 1, available.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setProductFocusIndex(prev => Math.max(prev - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (productFocusIndex >= 0 && productFocusIndex < available.length) {
+        handleSelectProduct(available[productFocusIndex]);
+        setProductFocusIndex(-1);
+      }
+    } else if (e.key === 'Escape') {
+      setIsProductSelectOpen(false);
+      setProductFocusIndex(-1);
+    }
   };
 
   const handleConfirmDatePicker = (selectedD, selectedT) => {
@@ -1528,25 +1547,27 @@ export default function App() {
                           type="text" 
                           placeholder="상품명 또는 ID 입력" 
                           value={productSearchTerm} 
-                          onChange={e => {setProductSearchTerm(e.target.value); setIsProductSelectOpen(true);}} 
+                          onChange={e => {setProductSearchTerm(e.target.value); setIsProductSelectOpen(true); setProductFocusIndex(-1);}} 
                           onFocus={() => setIsProductSelectOpen(true)} 
                           onKeyDown={handleProductKeyDown} 
                           className={glassInput} 
                         />
                         {isProductSelectOpen && (() => {
                           const selectedIds = new Set(scheduleForm.products.map(p => p.id));
-                          const available = productSearchResults.filter(p => !selectedIds.has(p.id));
+                          const available = productSearchResults.filter(p => !selectedIds.has(p.id)).slice(0, 50);
                           return (
                             <div className="absolute left-0 right-0 top-full mt-1.5 bg-white/90 backdrop-blur-2xl border border-white/60 shadow-xl rounded-2xl z-[70] max-h-56 overflow-y-auto p-2 animate-fade-in-fast">
                               {available.length === 0 ? (
                                 <div className="px-3 py-4 text-sm text-slate-400 font-bold text-center">{productSearchTerm ? '검색 결과 없음' : '선택 가능한 상품 없음'}</div>
-                              ) : available.slice(0, 50).map(p => (
-                                <button key={p.id} type="button" onClick={() => handleSelectProduct(p)} className="w-full text-left px-3 py-2 rounded-xl text-sm hover:bg-blue-50 active:bg-blue-100 active:scale-[0.98] transition-all mb-1 flex justify-between items-center gap-2">
-                                  <span className="font-bold text-slate-700 truncate">{p.name}</span>
+                              ) : available.map((p, idx) => (
+                                <button key={p.id} type="button" onClick={() => { handleSelectProduct(p); setProductFocusIndex(-1); }}
+                                  ref={idx === productFocusIndex ? (el) => { if (el) el.scrollIntoView({ block: 'nearest' }); } : undefined}
+                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm active:bg-blue-100 active:scale-[0.98] transition-all mb-1 flex justify-between items-center gap-2 ${idx === productFocusIndex ? 'bg-blue-100 ring-1 ring-blue-300' : 'hover:bg-blue-50'}`}>
+                                  <span className={`font-bold truncate ${idx === productFocusIndex ? 'text-blue-700' : 'text-slate-700'}`}>{p.name}</span>
                                   <span className="text-[9px] text-slate-400 font-mono shrink-0">{p.id}</span>
                                 </button>
                               ))}
-                              {available.length > 50 && <div className="px-3 py-2 text-[10px] text-slate-400 font-bold text-center">외 {available.length - 50}개 — 검색어를 입력하세요</div>}
+                              {productSearchResults.filter(p => !selectedIds.has(p.id)).length > 50 && <div className="px-3 py-2 text-[10px] text-slate-400 font-bold text-center">외 {productSearchResults.filter(p => !selectedIds.has(p.id)).length - 50}개 — 검색어를 입력하세요</div>}
                             </div>
                           );
                         })()}
