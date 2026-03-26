@@ -1326,7 +1326,10 @@ export default function App() {
             {activeTab === 'productList' && (
               <div className={`${glassPanel} flex flex-col h-full`}>
                 <div className="p-4 md:p-6 border-b border-white/40 flex justify-between items-center shrink-0">
-                  <h3 className="font-extrabold text-base md:text-lg text-slate-700">판매 상품 현황</h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-base md:text-lg text-slate-700">판매 상품 현황</h3>
+                    {isLoadingMore && <span className="inline-flex items-center gap-1 text-xs text-blue-500 font-bold"><span className="w-3 h-3 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin"></span>상품 로딩중...</span>}
+                  </div>
                   <div className="flex gap-2">
                     <button onClick={() => setIsFilterOpen(!isFilterOpen)} className={glassButtonSecondary}>상세 필터</button>
                     <button onClick={fetchProducts} disabled={isLoading} className={glassButtonSecondary}>{isLoading ? '로딩중...' : '새로고침'}</button>
