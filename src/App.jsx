@@ -698,9 +698,15 @@ export default function App() {
       try { data = JSON.parse(responseText); } 
       catch (e) { throw new Error("서버가 JSON이 아닌 데이터를 반환했습니다."); }
       const fetchedList = data.tasks || data.data || (Array.isArray(data) ? data : []);
-      const formattedTasks = fetchedList.map(task => ({
-        ...task, logs: task.logs || [`☁️ 서버에서 저장된 예약 정보를 불러왔습니다. (${new Date().toLocaleTimeString()})`]
-      }));
+      const formattedTasks = fetchedList.map(task => {
+        const matchedProduct = products.find(p => p.id === task.productId);
+        return {
+          ...task,
+          currentStatus: task.currentStatus || (matchedProduct ? matchedProduct.status : ''),
+          currentIsDisplayed: task.currentIsDisplayed !== undefined ? task.currentIsDisplayed : (matchedProduct ? matchedProduct.isDisplayed : undefined),
+          logs: task.logs || [`☁️ 서버에서 저장된 예약 정보를 불러왔습니다. (${new Date().toLocaleTimeString()})`]
+        };
+      });
       setTasks(formattedTasks);
     } catch (err) {
       console.error('예약 목록 조회 실패 상세 에러:', err);
@@ -1046,7 +1052,8 @@ export default function App() {
             newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
             executeAt: new Date(confirmedDateTime).toISOString(), token, communityId,
             sellerId: sellerId || '',
-            parentSellerId: prod.parentSellerId || ''
+            parentSellerId: prod.parentSellerId || '',
+            currentStatus: prod.status || '', currentIsDisplayed: prod.isDisplayed
           })
         });
         if (!res.ok) throw new Error();
@@ -1055,6 +1062,7 @@ export default function App() {
           newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
           executeAt: new Date(confirmedDateTime).getTime(), status: 'cloud_scheduled',
           sellerId: sellerId || '', parentSellerId: prod.parentSellerId || '',
+          currentStatus: prod.status || '', currentIsDisplayed: prod.isDisplayed,
           logs: ['✅ AWS EventBridge에 성공적으로 등록되었습니다.']
         });
       }));
@@ -1564,22 +1572,33 @@ export default function App() {
                         historyLogs
                           .filter(log => loginMode === 'admin' ? true : (log.sellerId && sellerProfiles.some(p => p.id === log.sellerId)))
                           .map((log, idx) => (
-                          <div key={idx} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-white/80 transition-all">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold text-white shadow-sm ${log.success ? 'bg-green-500' : 'bg-red-500'}`}>
-                                  {log.success ? '성공' : '에러'}
-                                </span>
-                                <span className="font-extrabold text-sm md:text-base text-slate-800">{log.productName || '알 수 없는 상품'}</span>
-                                {loginMode === 'admin' && log.sellerId && (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600 border border-purple-200">{sellerNames[log.sellerId] || log.sellerId}</span>
+                          <div key={idx} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white/80 transition-all">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold text-white shadow-sm ${log.success ? 'bg-green-500' : 'bg-red-500'}`}>
+                                {log.success ? '성공' : '에러'}
+                              </span>
+                              <span className="font-extrabold text-sm md:text-base text-slate-800">{log.productName || '알 수 없는 상품'}</span>
+                              {loginMode === 'admin' && log.sellerId && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600 border border-purple-200">{sellerNames[log.sellerId] || log.sellerId}</span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-mono">
+                              {log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}
+                            </p>
+                            {(log.newStatus || log.currentStatus) && (
+                              <div className="mt-2 flex items-center gap-2 text-xs font-bold">
+                                {log.currentStatus ? (
+                                  <>
+                                    <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(log.currentStatus)} · {log.currentIsDisplayed ? '진열' : '숨김'}</span>
+                                    <span className="text-slate-300">→</span>
+                                    <span className={`px-2 py-0.5 rounded-lg border ${log.success ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>{translateStatus(log.newStatus)} · {log.newIsDisplayed ? '진열' : '숨김'}</span>
+                                  </>
+                                ) : log.newStatus && (
+                                  <span className={`px-2 py-0.5 rounded-lg border ${log.success ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>{translateStatus(log.newStatus)} · {log.newIsDisplayed ? '진열' : '숨김'}</span>
                                 )}
                               </div>
-                              <p className="text-[10px] text-slate-500 font-mono">
-                                {log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}
-                              </p>
-                            </div>
-                            <div className="text-xs text-slate-600 bg-white/60 px-3 py-2 rounded-xl border border-white/50 shadow-inner max-w-md w-full md:w-auto break-words">
+                            )}
+                            <div className="mt-2 text-xs text-slate-600 bg-white/60 px-3 py-2 rounded-xl border border-white/50 shadow-inner break-words">
                               {log.message || (log.success ? '예약된 상태 변경이 정상적으로 완료되었습니다.' : '알 수 없는 AWS 측 오류가 발생했습니다.')}
                             </div>
                           </div>
@@ -1730,14 +1749,27 @@ export default function App() {
                   </div>
                   <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
                     {displayedTasks.map(t => (
-                      <div key={t.id} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl flex justify-between items-center hover:bg-white transition-all group">
-                        <div>
-                          <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{t.productName}</p>
-                          <p className="text-[10px] text-slate-500 font-bold mt-1">{new Date(t.executeAt).toLocaleString()} | {translateStatus(t.newStatus)} | {t.newIsDisplayed ? '진열' : '숨김'}</p>
+                      <div key={t.id} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white transition-all group">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{t.productName}</p>
+                            <p className="text-[10px] text-slate-400 font-bold mt-1">{new Date(t.executeAt).toLocaleString()}</p>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => openEditModal(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.edit}`}>수정</button>
+                            <button onClick={() => handleDeleteTask(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.delete}`}>삭제</button>
+                          </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => openEditModal(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.edit}`}>수정</button>
-                          <button onClick={() => handleDeleteTask(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.delete}`}>삭제</button>
+                        <div className="mt-2 flex items-center gap-2 text-xs font-bold">
+                          {t.currentStatus ? (
+                            <>
+                              <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(t.currentStatus)} · {t.currentIsDisplayed ? '진열' : '숨김'}</span>
+                              <span className="text-slate-300">→</span>
+                              <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
+                            </>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
+                          )}
                         </div>
                       </div>
                     ))}
