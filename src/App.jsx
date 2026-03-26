@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import DebugTokenTest from './DebugTokenTest.jsx';
+
 
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
@@ -344,7 +344,6 @@ const getCurrentLocalISOString = () => {
 };
 
 export default function App() {
-  const [isDebugMode, setIsDebugMode] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [token, setToken] = useState('');
   const [communityId] = useState(DEFAULT_GROUP_ID);
@@ -1149,23 +1148,6 @@ export default function App() {
     </div>
   );
 
-  // ==========================================
-  // 디버그 모드 화면
-  // ==========================================
-  if (isDebugMode) {
-    return (
-      <>
-        <GlobalStyles />
-        <div style={{ position: 'fixed', top: 12, right: 12, zIndex: 9999 }}>
-          <button onClick={() => setIsDebugMode(false)}
-            style={{ padding: '6px 16px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            디버그 닫기
-          </button>
-        </div>
-        <DebugTokenTest />
-      </>
-    );
-  }
 
   // 로그인 화면
   // ==========================================
@@ -1237,12 +1219,6 @@ export default function App() {
                 </div>
               </form>
             </div>
-            <div className="mt-4 text-center">
-              <button type="button" onClick={() => setIsDebugMode(true)}
-                className="text-[10px] text-slate-400/60 hover:text-slate-500 transition-colors font-mono tracking-wider">
-                Manual Token Test
-              </button>
-            </div>
           </div>
         </div>
       </>
@@ -1301,9 +1277,6 @@ export default function App() {
           </nav>
 
           <div className="p-4 border-t border-white/40 bg-white/30 space-y-2">
-            <button onClick={() => setIsDebugMode(true)} className="w-full py-2 text-[10px] text-slate-400 font-mono bg-white/40 border border-slate-200/50 hover:bg-white/80 hover:text-slate-600 active:bg-white/30 active:scale-[0.97] active:shadow-inner rounded-xl transition-all duration-300">
-              Token Debug
-            </button>
             <button onClick={handleLogout} className="w-full py-3 text-sm text-red-500 font-extrabold bg-white/80 border border-red-200 hover:bg-red-500 hover:text-white hover:border-red-500 rounded-2xl transition-all duration-300 shadow-sm hover:shadow-lg hover:shadow-red-500/30 active:scale-95 flex items-center justify-center gap-2 group">
               <svg className="w-4 h-4 transition-transform duration-300 group-hover:-translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
               로그아웃
