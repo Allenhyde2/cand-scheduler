@@ -335,6 +335,145 @@ export default function DebugTokenTest() {
         </div>
       )}
 
+      {/* PUT 헤더 조합 테스트 */}
+      <div style={{ background: '#fff7ed', border: '2px solid #fb923c', borderRadius: 8, padding: 16, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#c2410c' }}>PUT 헤더 조합 테스트</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6b7280' }}>
+          상품 ID를 입력하고 x-can-profile-id 헤더를 다양한 조합으로 테스트합니다. (isDisplayed 토글)
+        </p>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          <div style={{ flex: 2 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280' }}>상품 ID</label>
+            <input type="text" id="putTestProductId" placeholder="CP:XXXX"
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#6b7280' }}>변경할 isDisplayed</label>
+            <select id="putTestDisplayed" style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}>
+              <option value="true">true (진열)</option>
+              <option value="false">false (숨김)</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { label: 'profile-id 없이', profileId: '' },
+            { label: `셀러 ID (${sellerId || '미입력'})`, profileId: sellerId },
+            { label: '커스텀 profile-id', profileId: '__custom__' },
+          ].map((variant, idx) => (
+            <button key={idx} onClick={async () => {
+              const pid = document.getElementById('putTestProductId')?.value?.trim();
+              if (!pid) { addLog('상품 ID를 입력하세요.', 'error'); return; }
+              const useToken = canpassToken?.raw || token;
+              if (!useToken) { addLog('토큰이 없습니다.', 'error'); return; }
+              let profileId = variant.profileId;
+              if (profileId === '__custom__') {
+                profileId = prompt('x-can-profile-id 값을 입력하세요:') || '';
+                if (!profileId) return;
+              }
+              const newDisplayed = document.getElementById('putTestDisplayed')?.value === 'true';
+              const h = {
+                'content-type': 'application/json',
+                'authorization': `Bearer ${useToken.trim().replace(/^Bearer\s+/i, '')}`,
+                'x-can-community-id': communityId.trim(),
+              };
+              if (profileId) h['x-can-profile-id'] = profileId;
+              addLog(`[PUT 테스트] productId=${pid}, isDisplayed=${newDisplayed}, x-can-profile-id=${profileId || '(없음)'}`);
+              try {
+                const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`products/${pid}`)}`, {
+                  method: 'PUT', headers: h, body: JSON.stringify({ isDisplayed: newDisplayed })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  addLog(`[PUT 테스트] 실패 ${res.status}: ${JSON.stringify(data)}`, 'error');
+                } else {
+                  addLog(`[PUT 테스트] 성공! ${JSON.stringify(data).substring(0, 200)}`, 'success');
+                }
+              } catch (err) {
+                addLog(`[PUT 테스트] 에러: ${err.message}`, 'error');
+              }
+            }}
+              style={{ padding: '8px 16px', background: idx === 0 ? '#dc2626' : idx === 1 ? '#2563eb' : '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              {variant.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ⚠️ 진단 전용: PUT 헤더 조합 테스트 — 테스트 완료 후 제거 */}
+      <div style={{ background: '#fff7ed', border: '2px solid #fb923c', borderRadius: 8, padding: 16, marginBottom: 24 }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 16, color: '#c2410c' }}>PUT 헤더 조합 테스트 (진단용)</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 11, color: '#9a3412' }}>서브셀러 FORBIDDEN 원인 파악용. 다양한 헤더 조합으로 PUT 요청을 테스트합니다.</p>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: 2, minWidth: 200 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>상품 ID</label>
+            <input type="text" id="putTestProductId" placeholder="CP:XXXX"
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 120 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>isDisplayed</label>
+            <select id="putTestDisplayed" style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, boxSizing: 'border-box' }}>
+              <option value="true">true (진열)</option>
+              <option value="false">false (숨김)</option>
+            </select>
+          </div>
+          <div style={{ flex: 1, minWidth: 120 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>커스텀 헤더명</label>
+            <input type="text" id="putTestHeaderName" placeholder="x-can-profile-id" defaultValue="x-can-profile-id"
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ flex: 1, minWidth: 120 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>커스텀 헤더값</label>
+            <input type="text" id="putTestHeaderValue" placeholder="CS:XXXX"
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 12, fontFamily: 'monospace', boxSizing: 'border-box' }} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {[
+            { label: '헤더 없이', getExtra: () => ({}) },
+            { label: `x-can-profile-id: ${sellerId || '(미입력)'}`, getExtra: () => sellerId ? { 'x-can-profile-id': sellerId } : {} },
+            { label: '커스텀 헤더', getExtra: () => {
+              const n = document.getElementById('putTestHeaderName')?.value?.trim();
+              const v = document.getElementById('putTestHeaderValue')?.value?.trim();
+              return (n && v) ? { [n]: v } : {};
+            }},
+          ].map((variant, idx) => (
+            <button key={idx} onClick={async () => {
+              const pid = document.getElementById('putTestProductId')?.value?.trim();
+              if (!pid) { addLog('상품 ID를 입력하세요.', 'error'); return; }
+              const useToken = canpassToken?.raw || token;
+              if (!useToken) { addLog('토큰이 없습니다.', 'error'); return; }
+              const newDisplayed = document.getElementById('putTestDisplayed')?.value === 'true';
+              const extraHeaders = variant.getExtra();
+              const h = {
+                'content-type': 'application/json',
+                'authorization': `Bearer ${useToken.trim().replace(/^Bearer\s+/i, '')}`,
+                'x-can-community-id': communityId.trim(),
+                ...extraHeaders,
+              };
+              const extraStr = Object.keys(extraHeaders).length > 0 ? Object.entries(extraHeaders).map(([k,v]) => `${k}: ${v}`).join(', ') : '(없음)';
+              addLog(`[PUT 테스트] productId=${pid}, isDisplayed=${newDisplayed}, 추가헤더=[${extraStr}]`);
+              try {
+                const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`products/${pid}`)}`, {
+                  method: 'PUT', headers: h, body: JSON.stringify({ isDisplayed: newDisplayed })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                  addLog(`[PUT 테스트] 실패 ${res.status}: ${JSON.stringify(data)}`, 'error');
+                } else {
+                  addLog(`[PUT 테스트] 성공! isDisplayed → ${newDisplayed}`, 'success');
+                }
+              } catch (err) {
+                addLog(`[PUT 테스트] 에러: ${err.message}`, 'error');
+              }
+            }}
+              style={{ padding: '8px 16px', background: idx === 0 ? '#dc2626' : idx === 1 ? '#2563eb' : '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+              {variant.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* 실행 로그 조회 (HISTORY API 직접 호출) */}
       <div style={{ background: '#faf5ff', border: '2px solid #c084fc', borderRadius: 8, padding: 16, marginBottom: 24 }}>
         <h3 style={{ margin: '0 0 12px', fontSize: 16, color: '#7c3aed' }}>📋 예약 실행 로그 조회 (Lambda HISTORY)</h3>
