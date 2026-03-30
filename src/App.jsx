@@ -1482,7 +1482,7 @@ export default function App() {
                   </>)}
                   {/* 페이지네이션 */}
                   {products.length > 0 && (
-                    <div className="bg-white/30 backdrop-blur-md border-t border-white/40 px-6 py-3 flex items-center justify-between">
+                    <div className="bg-white/60 backdrop-blur-xl border-t border-white/50 shadow-sm px-6 py-3 flex items-center justify-between">
                       <span className="text-[11px] text-slate-400 font-bold flex items-center gap-2">
                         총 {filteredProducts.length}개{filteredProducts.length !== products.length ? ` (전체 ${products.length})` : ''} · {currentPage}/{totalPages} 페이지
                         {isLoadingMore && <span className="inline-flex items-center gap-1 text-blue-500"><span className="w-3 h-3 border-2 border-blue-200 border-t-blue-500 rounded-full animate-spin"></span>로딩중...</span>}
