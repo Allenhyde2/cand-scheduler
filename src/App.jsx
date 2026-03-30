@@ -1231,14 +1231,17 @@ export default function App() {
   return (
     <>
       <GlobalStyles />
-      <div className="flex h-screen w-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-purple-50 text-slate-800 font-sans overflow-hidden p-2 md:p-4 gap-4 relative">
-        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-purple-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
-        <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-blue-300 rounded-full mix-blend-multiply filter blur-[100px] opacity-30 pointer-events-none"></div>
+      <div className="flex h-screen w-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 text-slate-800 font-sans overflow-hidden p-2 md:p-4 gap-4 relative">
+        <div className="absolute top-[-15%] left-[-10%] w-[600px] h-[600px] rounded-full mix-blend-multiply filter blur-[120px] opacity-40 pointer-events-none" style={{background:'#4A64FF'}}></div>
+        <div className="absolute bottom-[-15%] right-[-10%] w-[600px] h-[600px] rounded-full mix-blend-multiply filter blur-[120px] opacity-35 pointer-events-none" style={{background:'#4A64FF'}}></div>
+        <div className="absolute top-[40%] right-[20%] w-[400px] h-[400px] rounded-full mix-blend-multiply filter blur-[100px] opacity-25 pointer-events-none" style={{background:'#7C3AED'}}></div>
+        <div className="absolute top-[10%] left-[30%] w-[350px] h-[350px] rounded-full mix-blend-multiply filter blur-[100px] opacity-20 pointer-events-none" style={{background:'#4A64FF'}}></div>
         <CustomUI />
         {isSidebarOpen && <div className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
         <aside className={`${isSidebarOpen ? 'translate-x-0 w-64 opacity-100' : '-translate-x-full w-64 md:translate-x-0 md:w-0 md:opacity-0'} fixed md:relative inset-y-2 md:inset-y-0 left-2 md:left-0 z-50 h-[calc(100vh-1rem)] md:h-full shrink-0 ${glassPanel} flex flex-col transition-all duration-300 overflow-hidden shadow-2xl md:shadow-none`}>
-          <div className="h-16 md:h-20 shrink-0 border-b border-white/40 bg-white/30 flex items-center justify-center">
-            <img src="https://ca.group-edge.net/i/G0IZUDWCL-logo-r1xy6d/logo" alt="VAKE Logo" className="h-9 md:h-10 object-contain" />
+          <div className="h-16 md:h-20 shrink-0 border-b border-white/40 bg-white/30 flex flex-col items-center justify-center gap-0.5">
+            <img src="https://ca.group-edge.net/i/G0IZUDWCL-logo-r1xy6d/logo" alt="VAKE Logo" className="h-7 md:h-8 object-contain mix-blend-multiply" />
+            <span className="text-[9px] font-bold tracking-widest text-slate-400 uppercase">커머스 스케쥴러</span>
           </div>
           
           <nav ref={navRef} className="flex-1 overflow-y-auto p-4 space-y-2 relative isolate">
