@@ -248,6 +248,7 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
   const now = new Date();
   const [hour, setHour] = useState(time ? time.split(':')[0] : String(now.getHours()).padStart(2, '0'));
   const [minute, setMinute] = useState(time ? time.split(':')[1] : String(now.getMinutes()).padStart(2, '0'));
+  const [second, setSecond] = useState(time ? (time.split(':')[2] || '00') : '00');
 
   const daysInMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0).getDate();
   const startDay = currentMonth.getDay();
@@ -264,7 +265,7 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
     const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
     const d = String(selectedDate.getDate()).padStart(2, '0');
     const finalDateStr = `${y}-${m}-${d}`;
-    const finalTimeStr = `${hour}:${minute}`;
+    const finalTimeStr = `${hour}:${minute}:${second}`;
     onDateChange(finalDateStr);
     onTimeChange(finalTimeStr);
     onConfirm(finalDateStr, finalTimeStr);
@@ -315,10 +316,12 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
 
       <div className="border-t border-slate-200/50 pt-4 mb-4">
         <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 ml-1">시간 설정</label>
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-2">
           <TimeInputPicker value={hour} onChange={setHour} min={0} max={23} suffix="시" />
           <span className="font-extrabold text-slate-400 text-2xl">:</span>
           <TimeInputPicker value={minute} onChange={setMinute} min={0} max={59} suffix="분" />
+          <span className="font-extrabold text-slate-400 text-2xl">:</span>
+          <TimeInputPicker value={second} onChange={setSecond} min={0} max={59} suffix="초" />
         </div>
       </div>
 
