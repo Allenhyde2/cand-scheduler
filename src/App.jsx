@@ -1239,7 +1239,7 @@ export default function App() {
         <CustomUI />
         {isSidebarOpen && <div className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
         <aside className={`${isSidebarOpen ? 'translate-x-0 w-64 opacity-100' : '-translate-x-full w-64 md:translate-x-0 md:w-0 md:opacity-0'} fixed md:relative inset-y-2 md:inset-y-0 left-2 md:left-0 z-50 h-[calc(100vh-1rem)] md:h-full shrink-0 ${glassPanel} flex flex-col transition-all duration-300 overflow-hidden shadow-2xl md:shadow-none`}>
-          <div className="h-16 md:h-20 shrink-0 border-b border-white/40 flex flex-col items-center justify-center gap-0.5">
+          <div className="h-16 md:h-20 shrink-0 border-b border-white/40 flex flex-col items-center justify-center gap-1.5">
             <img src="https://ca.group-edge.net/i/G0IZUDWCL-logo-r1xy6d/logo" alt="VAKE Logo" className="h-7 md:h-8 object-contain mix-blend-multiply" />
             <span className="text-[11px] font-semibold tracking-widest text-slate-500 uppercase">커머스 스케쥴러</span>
           </div>
