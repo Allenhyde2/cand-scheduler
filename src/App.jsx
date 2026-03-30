@@ -1555,8 +1555,13 @@ export default function App() {
                                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600 border border-purple-200">{sellerNames[log.sellerId] || log.sellerId}</span>
                               )}
                             </div>
-                            <p className="text-[10px] text-slate-400 font-mono">
-                              {log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}
+                            <p className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
+                              <span>{log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}</span>
+                              {log.delayMs != null && (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${log.delayMs < 10000 ? 'bg-green-100 text-green-600' : log.delayMs < 30000 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                                  +{log.delayMs < 1000 ? `${log.delayMs}ms` : `${(log.delayMs / 1000).toFixed(1)}s`} 딜레이
+                                </span>
+                              )}
                             </p>
                             {(log.newStatus || log.currentStatus) && (
                               <div className="mt-2 flex items-center gap-2 text-xs font-bold">
