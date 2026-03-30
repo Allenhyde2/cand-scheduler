@@ -1446,8 +1446,9 @@ export default function App() {
                   </div>
                   {/* 데스크톱 테이블 뷰 */}
                   <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-white/40 backdrop-blur-md border-b border-white/40 text-slate-500 sticky top-0 z-10">
+                    <thead className="bg-white/80 backdrop-blur-xl border-b border-white/60 text-slate-500 sticky top-0 z-10">
                       <tr><th className="px-4 py-4 text-center w-[60px]">유형</th><th className="pl-6 pr-2 py-4 w-[52px]"></th><th className="px-4 py-4">상품 정보</th><th className="px-4 py-4">판매자</th><th className="px-4 py-4 text-right">가격</th><th className="px-4 py-4 text-center">진열</th><th className="px-4 py-4 text-center">상태</th><th className="px-4 py-4 text-center">관리</th></tr>
+                      <tr className="sticky top-[57px] z-10"><td colSpan={8}><div className="h-3 bg-gradient-to-b from-white/50 to-transparent pointer-events-none" /></td></tr>
                     </thead>
                     <tbody className="divide-y divide-white/40">
                       {displayedProducts.map(p => (
