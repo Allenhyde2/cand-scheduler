@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 
 const DEFAULT_GROUP_ID = 'G0IZUDWCL';
 const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-const SCHEDULER_API_URL = 'https://2fb8b65g8f.execute-api.ap-southeast-2.amazonaws.com/schedule';
-const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b'; 
+const SCHEDULER_API_URL = '/api/schedule';
+const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b';
 const SCOPES = 'email poll option vote addresses member:MOIM:payment:read member:MOIM:product:read member:MOIM:product:write';
 
 // ⭐️ 백엔드(Vercel 서버리스 함수) 절대 경로 설정 (S3 배포용)
@@ -25,7 +25,8 @@ const colorVariants = {
 
 // ⭐️ Vite 기본 CSS(너비 제한) 강제 무력화 및 공통 스타일 (분리형 컴포넌트)
 const GlobalStyles = () => (
-  <style dangerouslySetInnerHTML={{__html: `
+  <style dangerouslySetInnerHTML={{
+    __html: `
     html, body, #root {
       max-width: none !important;
       width: 100vw !important;
@@ -66,18 +67,18 @@ function GlassSelect({ value, options, onChange, placeholder = "선택해주세�
 
   return (
     <div className="relative w-full" ref={ref}>
-      <div 
+      <div
         onClick={() => setIsOpen(!isOpen)}
         className="w-full px-4 py-3 bg-white/50 border border-white/60 rounded-2xl cursor-pointer hover:bg-white/70 active:bg-white/40 active:scale-[0.99] active:shadow-inner transition-all text-sm font-bold text-slate-700 shadow-sm flex justify-between items-center group"
       >
         <span>{selectedLabel}</span>
         <svg className={`w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 9l-7 7-7-7"></path></svg>
       </div>
-      
+
       <div className={`absolute left-0 right-0 top-full mt-1 z-[200] transition-all duration-300 ease-out origin-top ${isOpen ? 'opacity-100 scale-y-100' : 'opacity-0 scale-y-0 pointer-events-none'}`}>
         <div className="bg-white/95 backdrop-blur-2xl border border-white/60 rounded-2xl shadow-2xl p-1.5 overflow-hidden max-h-60 overflow-y-auto">
           {options.map((opt) => (
-            <div 
+            <div
               key={opt.value}
               onClick={() => { onChange(opt.value); setIsOpen(false); }}
               className={`px-3 py-2.5 rounded-xl text-sm font-bold cursor-pointer transition-all active:scale-[0.97] ${value === opt.value ? 'bg-blue-600 text-white shadow-md active:bg-blue-800' : 'text-slate-600 hover:bg-blue-50 hover:text-blue-700 active:bg-blue-100'}`}
@@ -298,15 +299,14 @@ function GlassDateTimePicker({ date, time, onDateChange, onTimeChange, onConfirm
               key={i}
               disabled={isPast}
               onClick={() => setSelectedDate(thisDate)}
-              className={`h-8 w-8 rounded-full text-xs font-bold mx-auto flex items-center justify-center transition-all ${
-                isSelected
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 scale-110'
-                  : isToday
-                    ? 'ring-2 ring-blue-400 text-blue-600 font-extrabold hover:bg-blue-50'
+              className={`h-8 w-8 rounded-full text-xs font-bold mx-auto flex items-center justify-center transition-all ${isSelected
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 scale-110'
+                : isToday
+                  ? 'ring-2 ring-blue-400 text-blue-600 font-extrabold hover:bg-blue-50'
                   : isPast
                     ? 'text-slate-300 cursor-not-allowed'
                     : 'text-slate-700 hover:bg-blue-50 hover:text-blue-600'
-              }`}
+                }`}
             >
               {d}
             </button>
@@ -354,9 +354,9 @@ export default function App() {
   const [sellerProfiles, setSellerProfiles] = useState([]); // [{id, name}] — 로그인한 사용자의 모든 CS: 프로필
   const [activeSellerId, setActiveSellerId] = useState(''); // 헤더 드롭다운에서 선택된 프로필 ('' = 전체)
   const [loginMode, setLoginMode] = useState(() => localStorage.getItem('cand_login_mode') || sessionStorage.getItem('cand_login_mode') || 'seller');
-  const [activeTab, setActiveTab] = useState('productList'); 
+  const [activeTab, setActiveTab] = useState('productList');
   const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth > 768);
-  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' }); 
+  const [toast, setToast] = useState({ visible: false, message: '', type: 'info' });
   const [confirmDialog, setConfirmDialog] = useState({ visible: false, message: '', onConfirm: null });
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -416,10 +416,10 @@ export default function App() {
       const res = await fetch(SCHEDULER_API_URL, {
         method: 'POST',
         headers: getAuthHeaders(currentToken),
-        body: JSON.stringify({ action: 'HISTORY', token: currentToken, communityId }) 
+        body: JSON.stringify({ action: 'HISTORY', token: currentToken, communityId })
       });
       if (!res.ok) throw new Error(`히스토리 로드 실패: ${res.status}`);
-      
+
       const data = await res.json();
       setHistoryLogs(data.logs || []);
     } catch (err) {
@@ -442,11 +442,11 @@ export default function App() {
         }
       }
     };
-    
+
     updateIndicator();
-    const timer = setTimeout(updateIndicator, 50); 
+    const timer = setTimeout(updateIndicator, 50);
     window.addEventListener('resize', updateIndicator);
-    
+
     return () => {
       clearTimeout(timer);
       window.removeEventListener('resize', updateIndicator);
@@ -562,12 +562,12 @@ export default function App() {
 
         try {
           const redirectUri = `${window.location.origin}/canpass/callback`;
-          
+
           const res = await fetch(`${BACKEND_API_URL}/api/token`, {
             method: 'POST', headers: { 'content-type': 'application/json' },
             body: JSON.stringify({ client_id: CLIENT_ID, code: code, code_verifier: codeVerifier, redirect_uri: redirectUri })
           });
-          
+
           const data = await res.json();
           if (!res.ok) throw new Error(data.error_description || data.error || '토큰 발급 실패');
 
@@ -590,7 +590,7 @@ export default function App() {
                 try {
                   const r = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent('sellers/' + sid)}`, { method: 'GET', headers: { 'content-type': 'application/json', 'authorization': `Bearer ${accessToken}`, 'x-can-community-id': communityId } });
                   if (r.ok) { const d = await r.json(); return { id: sid, name: d.name || sid }; }
-                } catch(e) {}
+                } catch (e) { }
                 return { id: sid, name: sid };
               }));
               setSellerProfiles(profiles);
@@ -621,25 +621,25 @@ export default function App() {
           sessionStorage.removeItem('oauth_state');
           sessionStorage.removeItem('oauth_verifier');
         }
-      } 
+      }
       else {
         const savedToken = localStorage.getItem('cand_token');
         const savedSellerId = localStorage.getItem('cand_seller_id');
         const savedMode = localStorage.getItem('cand_login_mode') || 'seller';
         const savedRecentProducts = localStorage.getItem('cand_recent_products');
-        
+
         if (savedToken) {
           setToken(savedToken);
           setSellerId(savedSellerId || '');
           setLoginMode(savedMode);
           setIsAuthenticated(true);
-          try { setSellerProfiles(JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]')); } catch(e) {}
+          try { setSellerProfiles(JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]')); } catch (e) { }
           fetchProductsWithArgs(savedToken, savedSellerId, savedMode, false);
           fetchScheduledTasks(savedToken);
           fetchHistoryLogs(savedToken);
         }
         if (savedRecentProducts) {
-          try { setRecentProducts(JSON.parse(savedRecentProducts)); } catch(e) {}
+          try { setRecentProducts(JSON.parse(savedRecentProducts)); } catch (e) { }
         }
       }
     };
@@ -664,7 +664,7 @@ export default function App() {
     authUrl.search = new URLSearchParams({
       response_type: 'code', action: 'signin', client_id: CLIENT_ID,
       code_challenge: codeChallenge, code_challenge_method: 'S256',
-      redirect_uri: redirectUri, community_id: DEFAULT_GROUP_ID, state, scope: SCOPES 
+      redirect_uri: redirectUri, community_id: DEFAULT_GROUP_ID, state, scope: SCOPES
     }).toString();
     window.location.href = authUrl.toString();
   };
@@ -688,7 +688,7 @@ export default function App() {
   const fetchScheduledTasks = async (currentToken) => {
     try {
       const res = await fetch(SCHEDULER_API_URL, {
-        method: 'POST', headers: getAuthHeaders(currentToken), 
+        method: 'POST', headers: getAuthHeaders(currentToken),
         body: JSON.stringify({ action: 'LIST', token: currentToken, communityId })
       });
       if (!res.ok) {
@@ -697,7 +697,7 @@ export default function App() {
       }
       const responseText = await res.text();
       let data;
-      try { data = JSON.parse(responseText); } 
+      try { data = JSON.parse(responseText); }
       catch (e) { throw new Error("서버가 JSON이 아닌 데이터를 반환했습니다."); }
       const fetchedList = data.tasks || data.data || (Array.isArray(data) ? data : []);
       const formattedTasks = fetchedList.map(task => {
@@ -764,7 +764,7 @@ export default function App() {
       };
 
       // seller 모드: 모든 CS: 프로필로 병렬 조회
-      const savedProfiles = (() => { try { return JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]'); } catch(e) { return []; } })();
+      const savedProfiles = (() => { try { return JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]'); } catch (e) { return []; } })();
       const allSellerIds = currentMode === 'seller' && savedProfiles.length > 1
         ? savedProfiles.map(p => p.id)
         : currentSellerId ? [currentSellerId] : [null];
@@ -860,7 +860,7 @@ export default function App() {
       stockType: p.stockCount === null || p.stockCount === undefined ? 'unlimited' : 'limited',
       stockCount: p.stockCount || '', isDisplayed: p.isDisplayed !== false ? 'true' : 'false',
       status: p.status || 'onSale', description: p.description || '',
-      _original: p 
+      _original: p
     });
   };
 
@@ -868,7 +868,7 @@ export default function App() {
 
   const handleUpdateProduct = async () => {
     const { id, name, price, stockType, stockCount, isDisplayed, status, description, _original } = productEditModal;
-    
+
     if (!_original) {
       showToast('원본 상품 데이터를 찾을 수 없어 수정할 수 없습니다.', 'error');
       return;
@@ -911,7 +911,7 @@ export default function App() {
     // ⭐️ [견고한 이미지 파싱] 백엔드가 배열로 주든, 객체로 주든 완벽히 매핑합니다.
     if (_original.images) {
       const extractUrlString = (img) => typeof img === 'string' ? img : (img?.url || '');
-      
+
       if (Array.isArray(_original.images)) {
         payload.images = {
           mobile: _original.images.map(extractUrlString).filter(Boolean),
@@ -929,7 +929,7 @@ export default function App() {
 
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
-      
+
       const requestHeaders = getAuthHeaders(token);
       if (sellerId) {
         requestHeaders['x-can-profile-id'] = sellerId;
@@ -942,16 +942,16 @@ export default function App() {
         headers: requestHeaders,
         body: JSON.stringify(payload)
       });
-      
+
       if (!res.ok) {
         let errMessage = `오류 코드: ${res.status}`;
         try {
           const errData = await res.json();
           errMessage = errData.message || errData.error || errData.code || JSON.stringify(errData);
-        } catch(e) { }
+        } catch (e) { }
         throw new Error(errMessage);
       }
-      
+
       setProducts(prev => prev.map(p => p.id === id ? { ...p, ...payload } : p));
       closeProductEditModal();
       showToast('상품이 성공적으로 수정되었습니다.', 'success');
@@ -1059,20 +1059,21 @@ export default function App() {
           })
         });
         if (!res.ok) throw new Error();
+        const resData = await res.json();
         newTasks.push({
-          id: newTaskId, productId: prod.id, productName: prod.name,
+          id: newTaskId, messageId: resData.messageId, productId: prod.id, productName: prod.name,
           newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
           executeAt: new Date(confirmedDateTime).getTime(), status: 'cloud_scheduled',
           sellerId: sellerId || '', parentSellerId: prod.parentSellerId || '',
           currentStatus: prod.status || '', currentIsDisplayed: prod.isDisplayed,
-          logs: ['✅ AWS EventBridge에 성공적으로 등록되었습니다.']
+          logs: ['✅ QStash 대기열에 예약이 성공적으로 등록되었습니다.']
         });
       }));
       setTasks(prev => [...newTasks, ...prev]);
-      
+
       const kstNow = getCurrentLocalISOString();
       setConfirmedDateTime(kstNow); setPickerDate(kstNow.split('T')[0]); setPickerTime(kstNow.split('T')[1]);
-      
+
       setScheduleForm({ ...scheduleForm, products: [] });
       showToast(`${scheduleForm.products.length}건의 상품 예약이 전송되었습니다!`, 'success');
     } catch (err) { showToast('예약 전송 중 오류가 발생했습니다.', 'error'); }
@@ -1083,8 +1084,8 @@ export default function App() {
     try {
       showToast('삭제 중...', 'info');
       const response = await fetch(SCHEDULER_API_URL, {
-        method: 'POST', headers: getAuthHeaders(token), 
-        body: JSON.stringify({ action: 'DELETE', taskId: task.id, token, communityId })
+        method: 'POST', headers: getAuthHeaders(token),
+        body: JSON.stringify({ action: 'DELETE', taskId: task.id, messageId: task.messageId, executeAt: task.executeAt, token, communityId })
       });
       if (!response.ok) throw new Error();
       setTasks(prev => prev.filter(t => t.id !== task.id));
@@ -1106,11 +1107,13 @@ export default function App() {
     try {
       showToast('수정 중...', 'info');
       const response = await fetch(SCHEDULER_API_URL, {
-        method: 'POST', headers: getAuthHeaders(token), 
-        body: JSON.stringify({ action: 'UPDATE', taskId: editModal.task.id, productId: editModal.task.productId, productName: editModal.task.productName, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: executeTimeIso, token, communityId, sellerId: editModal.task.sellerId || sellerId || '', parentSellerId: editModal.task.parentSellerId || '' })
+        method: 'POST', headers: getAuthHeaders(token),
+        body: JSON.stringify({ action: 'UPDATE', taskId: editModal.task.id, messageId: editModal.task.messageId, oldExecuteAt: editModal.task.executeAt, productId: editModal.task.productId, productName: editModal.task.productName, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: executeTimeIso, token, communityId, sellerId: editModal.task.sellerId || sellerId || '', parentSellerId: editModal.task.parentSellerId || '' })
       });
       if (!response.ok) throw new Error();
-      setTasks(prev => prev.map(t => t.id === editModal.task.id ? { ...t, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: new Date(`${editModal.date}T${editModal.time}`).getTime() } : t)); 
+      const resData = await response.json();
+
+      setTasks(prev => prev.map(t => t.id === editModal.task.id ? { ...t, messageId: resData.messageId, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: new Date(`${editModal.date}T${editModal.time}`).getTime() } : t));
       setEditModal({ ...editModal, isOpen: false });
       showToast('예약이 수정되었습니다.', 'success');
     } catch (err) { showToast(`수정 실패`, 'error'); }
@@ -1235,10 +1238,10 @@ export default function App() {
     <>
       <GlobalStyles />
       <div className="flex h-screen w-screen bg-gradient-to-br from-slate-100 via-blue-50 to-indigo-100 text-slate-800 font-sans overflow-hidden p-2 md:p-4 gap-4 relative">
-        <div className="absolute top-[-15%] left-[-10%] w-[600px] h-[600px] rounded-full mix-blend-multiply filter blur-[120px] opacity-40 pointer-events-none" style={{background:'#4A64FF'}}></div>
-        <div className="absolute bottom-[-15%] right-[-10%] w-[600px] h-[600px] rounded-full mix-blend-multiply filter blur-[120px] opacity-35 pointer-events-none" style={{background:'#4A64FF'}}></div>
-        <div className="absolute top-[40%] right-[20%] w-[400px] h-[400px] rounded-full mix-blend-multiply filter blur-[100px] opacity-25 pointer-events-none" style={{background:'#7C3AED'}}></div>
-        <div className="absolute top-[10%] left-[30%] w-[350px] h-[350px] rounded-full mix-blend-multiply filter blur-[100px] opacity-20 pointer-events-none" style={{background:'#4A64FF'}}></div>
+        <div className="absolute top-[-15%] left-[-10%] w-[600px] h-[600px] rounded-full mix-blend-multiply filter blur-[120px] opacity-40 pointer-events-none" style={{ background: '#4A64FF' }}></div>
+        <div className="absolute bottom-[-15%] right-[-10%] w-[600px] h-[600px] rounded-full mix-blend-multiply filter blur-[120px] opacity-35 pointer-events-none" style={{ background: '#4A64FF' }}></div>
+        <div className="absolute top-[40%] right-[20%] w-[400px] h-[400px] rounded-full mix-blend-multiply filter blur-[100px] opacity-25 pointer-events-none" style={{ background: '#7C3AED' }}></div>
+        <div className="absolute top-[10%] left-[30%] w-[350px] h-[350px] rounded-full mix-blend-multiply filter blur-[100px] opacity-20 pointer-events-none" style={{ background: '#4A64FF' }}></div>
         <CustomUI />
         {isSidebarOpen && <div className="fixed inset-0 z-40 bg-slate-900/20 backdrop-blur-sm md:hidden" onClick={() => setIsSidebarOpen(false)}></div>}
         <aside className={`${isSidebarOpen ? 'translate-x-0 w-64 opacity-100' : '-translate-x-full w-64 md:translate-x-0 md:w-0 md:opacity-0'} fixed md:relative inset-y-2 md:inset-y-0 left-2 md:left-0 z-50 h-[calc(100vh-1rem)] md:h-full shrink-0 ${glassPanel} flex flex-col transition-all duration-300 overflow-hidden shadow-2xl md:shadow-none`}>
@@ -1246,36 +1249,36 @@ export default function App() {
             <img src="https://ca.group-edge.net/i/G0IZUDWCL-logo-r1xy6d/logo" alt="VAKE Logo" className="h-7 md:h-8 object-contain mix-blend-multiply" />
             <span className="text-[11px] font-semibold tracking-widest text-slate-500 uppercase">커머스 스케쥴러</span>
           </div>
-          
+
           <nav ref={navRef} className="flex-1 overflow-y-auto p-4 space-y-2 relative isolate">
-            <div 
+            <div
               className="absolute left-4 right-4 bg-white shadow-sm rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)] -z-10 border border-white/60"
-              style={{ 
-                top: `${indicatorStyle.top}px`, 
-                height: `${indicatorStyle.height}px`, 
-                opacity: indicatorStyle.opacity 
+              style={{
+                top: `${indicatorStyle.top}px`,
+                height: `${indicatorStyle.height}px`,
+                opacity: indicatorStyle.opacity
               }}
             />
 
             <div className="px-2 pt-2 pb-1"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Management</span></div>
-            <button 
-              data-active={activeTab === 'productList'} 
-              onClick={() => {setActiveTab('productList'); if(window.innerWidth < 768) setIsSidebarOpen(false);}} 
+            <button
+              data-active={activeTab === 'productList'}
+              onClick={() => { setActiveTab('productList'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
               className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'productList' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
             >
               상품 관리
             </button>
-            <button 
-              data-active={activeTab === 'schedule'} 
-              onClick={() => {setActiveTab('schedule'); if(window.innerWidth < 768) setIsSidebarOpen(false);}} 
+            <button
+              data-active={activeTab === 'schedule'}
+              onClick={() => { setActiveTab('schedule'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
               className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'schedule' ? 'text-blue-600' : 'text-slate-600 hover:bg-white/50'}`}
             >
               상태 예약 변경
             </button>
             <div className="px-2 pt-6 pb-1"><span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">System</span></div>
-            <button 
-              data-active={activeTab === 'settings'} 
-              onClick={() => {setActiveTab('settings'); if(window.innerWidth < 768) setIsSidebarOpen(false);}} 
+            <button
+              data-active={activeTab === 'settings'}
+              onClick={() => { setActiveTab('settings'); if (window.innerWidth < 768) setIsSidebarOpen(false); }}
               className={`w-full text-left px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 relative z-10 active:scale-[0.97] ${activeTab === 'settings' ? 'text-slate-800' : 'text-slate-600 hover:bg-white/50'}`}
             >
               환경 설정
@@ -1300,7 +1303,7 @@ export default function App() {
                 <GlassSelect
                   value={activeSellerId}
                   options={[{ value: '', label: `전체 (${sellerProfiles.length}개 셀러)` }, ...sellerProfiles.map(p => ({ value: p.id, label: p.name || p.id }))]}
-                  onChange={(v) => { setActiveSellerId(v); setFilters(f => ({...f, sellerId: v ? '' : f.sellerId})); setCurrentPage(1); }}
+                  onChange={(v) => { setActiveSellerId(v); setFilters(f => ({ ...f, sellerId: v ? '' : f.sellerId })); setCurrentPage(1); }}
                   placeholder="셀러 선택"
                 />
               ) : (
@@ -1327,7 +1330,7 @@ export default function App() {
                     {/* 1행: 상품 이름 검색 */}
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 mb-1">상품 이름</label>
-                      <input type="text" value={filters.name} onChange={e => { setFilters({...filters, name: e.target.value}); setCurrentPage(1); }} placeholder="상품명 검색..." className={glassInput} />
+                      <input type="text" value={filters.name} onChange={e => { setFilters({ ...filters, name: e.target.value }); setCurrentPage(1); }} placeholder="상품명 검색..." className={glassInput} />
                     </div>
                     {/* 2행: 상품 유형 + 진열 상태 + 판매 상태 태그 (같은 줄) */}
                     <div className="mt-3 flex flex-wrap items-start gap-x-6 gap-y-3">
@@ -1340,13 +1343,12 @@ export default function App() {
                               <button key={opt.value} type="button"
                                 onClick={() => {
                                   const next = isChecked ? filters.type.filter(t => t !== opt.value) : [...filters.type, opt.value];
-                                  setFilters({...filters, type: next}); setCurrentPage(1);
+                                  setFilters({ ...filters, type: next }); setCurrentPage(1);
                                 }}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
-                                  isChecked
-                                    ? 'bg-violet-500 text-white border-violet-400 shadow-md'
-                                    : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
-                                }`}>
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${isChecked
+                                  ? 'bg-violet-500 text-white border-violet-400 shadow-md'
+                                  : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
+                                  }`}>
                                 {opt.label}
                               </button>
                             );
@@ -1358,12 +1360,11 @@ export default function App() {
                         <div className="flex gap-1.5">
                           {[{ value: 'all', label: '전체' }, { value: 'true', label: '진열중' }, { value: 'false', label: '숨김' }].map(opt => (
                             <button key={opt.value} type="button"
-                              onClick={() => { setFilters({...filters, display: opt.value}); setCurrentPage(1); }}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
-                                filters.display === opt.value
-                                  ? 'bg-indigo-500 text-white border-indigo-400 shadow-md'
-                                  : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
-                              }`}>
+                              onClick={() => { setFilters({ ...filters, display: opt.value }); setCurrentPage(1); }}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${filters.display === opt.value
+                                ? 'bg-indigo-500 text-white border-indigo-400 shadow-md'
+                                : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
+                                }`}>
                               {opt.label}
                             </button>
                           ))}
@@ -1378,13 +1379,12 @@ export default function App() {
                               <button key={opt.value} type="button"
                                 onClick={() => {
                                   const next = isChecked ? filters.status.filter(s => s !== opt.value) : [...filters.status, opt.value];
-                                  setFilters({...filters, status: next}); setCurrentPage(1);
+                                  setFilters({ ...filters, status: next }); setCurrentPage(1);
                                 }}
-                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${
-                                  isChecked
-                                    ? 'bg-blue-500 text-white border-blue-400 shadow-md'
-                                    : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
-                                }`}>
+                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all active:scale-95 ${isChecked
+                                  ? 'bg-blue-500 text-white border-blue-400 shadow-md'
+                                  : 'bg-white/50 border-white/60 text-slate-500 hover:bg-white/80'
+                                  }`}>
                                 {opt.label}
                               </button>
                             );
@@ -1397,7 +1397,7 @@ export default function App() {
                       {uniqueSellers.length > 0 && (
                         <div className="flex-1 min-w-0">
                           <label className="block text-[10px] font-bold text-slate-400 mb-1">판매자 선택</label>
-                          <SearchableGlassSelect value={filters.sellerId} onChange={v => { setFilters({...filters, sellerId: v}); setCurrentPage(1); }} options={[{ value: '', label: '전체' }, ...uniqueSellers.map(s => ({ value: s.id, label: s.name }))]} />
+                          <SearchableGlassSelect value={filters.sellerId} onChange={v => { setFilters({ ...filters, sellerId: v }); setCurrentPage(1); }} options={[{ value: '', label: '전체' }, ...uniqueSellers.map(s => ({ value: s.id, label: s.name }))]} />
                         </div>
                       )}
                       <button onClick={resetFilters} className="shrink-0 text-xs font-bold text-slate-500 hover:text-slate-700 active:text-slate-900 active:scale-95 transition-all pb-2">초기화</button>
@@ -1410,7 +1410,7 @@ export default function App() {
                     <div className="p-10 md:p-20 text-center text-slate-500">
                       <div className="bg-white/60 p-6 rounded-2xl border border-white/60 shadow-sm max-w-sm mx-auto">
                         <p className="mb-2 font-extrabold text-red-500 text-sm">⚠️ 셀러 ID 추출 실패</p>
-                        <p className="text-[11px] text-slate-500 font-bold leading-relaxed">보안 정책 및 접근 권한 제한으로 인해 판매자 아이디를 찾지 못했습니다.<br/>다시 로그인하거나 관리자에게 문의해주세요.</p>
+                        <p className="text-[11px] text-slate-500 font-bold leading-relaxed">보안 정책 및 접근 권한 제한으로 인해 판매자 아이디를 찾지 못했습니다.<br />다시 로그인하거나 관리자에게 문의해주세요.</p>
                       </div>
                     </div>
                   ) : isLoading && products.length === 0 ? (
@@ -1423,66 +1423,66 @@ export default function App() {
                   ) : products.length === 0 ? (
                     <div className="p-16 text-center text-slate-400 font-extrabold text-sm">조회된 상품이 없습니다.</div>
                   ) : (<>
-                  {/* 모바일 카드 뷰 */}
-                  <div className="md:hidden p-3 space-y-2.5">
-                    {displayedProducts.map(p => (
-                      <div key={p.id} className="bg-white/50 border border-white/60 rounded-2xl p-4 shadow-sm hover:bg-white/70 transition-all active:scale-[0.99]">
-                        <div className="flex gap-3 mb-2">
-                          <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-slate-100 border border-white/60">
-                            {p.images?.mobile?.[0]?.url ? <img src={p.images.mobile[0].url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-lg">📦</div>}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-extrabold text-slate-800 text-sm truncate">{p.name || '이름 없음'}</p>
-                            <p className="text-[9px] text-slate-400 font-mono mt-0.5">{p.id}</p>
-                            {p.sellerId && <p className="text-[10px] text-slate-500 font-bold mt-0.5 truncate">{sellerNames[p.sellerId] || p.sellerId}</p>}
-                          </div>
-                          <button onClick={() => openProductEditModal(p)} className="shrink-0 self-start text-[11px] font-bold text-blue-600 bg-white/60 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 transition-all">수정</button>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({normal:'bg-slate-400/15 text-slate-500 border-slate-300/50',fund:'bg-violet-500/15 text-violet-600 border-violet-300/50',subscription:'bg-teal-500/15 text-teal-600 border-teal-300/50'})[p.type] || 'bg-slate-400/15 text-slate-400 border-slate-300/50'}`}>{({normal:'일반',fund:'펀딩',subscription:'구독'})[p.type] || p.type || '-'}</span>
-                          <span className="text-xs font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</span>
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50' : 'bg-slate-400/15 text-slate-500 border-slate-300/50'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
-                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({scheduled:'bg-amber-500/15 text-amber-600 border-amber-300/50',onSale:'bg-blue-500/15 text-blue-600 border-blue-300/50',soldOut:'bg-red-500/15 text-red-500 border-red-300/50',completed:'bg-slate-400/15 text-slate-400 border-slate-300/50'})[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* 데스크톱 테이블 뷰 */}
-                  <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-white/80 backdrop-blur-xl border-b border-white/60 text-slate-500 sticky top-0 z-10">
-                      <tr><th className="px-4 py-4 text-center w-[60px]">유형</th><th className="pl-6 pr-2 py-4 w-[52px]"></th><th className="px-4 py-4">상품 정보</th><th className="px-4 py-4">판매자</th><th className="px-4 py-4 text-right">가격</th><th className="px-4 py-4 text-center">진열</th><th className="px-4 py-4 text-center">상태</th><th className="px-4 py-4 text-center">관리</th></tr>
-                      <tr className="sticky top-[57px] z-10"><td colSpan={8}><div className="h-3 bg-gradient-to-b from-white/50 to-transparent pointer-events-none" /></td></tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/40">
+                    {/* 모바일 카드 뷰 */}
+                    <div className="md:hidden p-3 space-y-2.5">
                       {displayedProducts.map(p => (
-                        <tr key={p.id} className="hover:bg-white/40 transition-colors group">
-                          <td className="px-4 py-3 text-center">
-                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({normal:'bg-slate-400/15 text-slate-500 border-slate-300/50',fund:'bg-violet-500/15 text-violet-600 border-violet-300/50',subscription:'bg-teal-500/15 text-teal-600 border-teal-300/50'})[p.type] || 'bg-slate-400/15 text-slate-400 border-slate-300/50'}`}>{({normal:'일반',fund:'펀딩',subscription:'구독'})[p.type] || p.type || '-'}</span>
-                          </td>
-                          <td className="pl-6 pr-2 py-3">
-                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-white/60 shrink-0">
-                              {p.images?.mobile?.[0]?.url ? <img src={p.images.mobile[0].url} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-sm">📦</div>}
+                        <div key={p.id} className="bg-white/50 border border-white/60 rounded-2xl p-4 shadow-sm hover:bg-white/70 transition-all active:scale-[0.99]">
+                          <div className="flex gap-3 mb-2">
+                            <div className="shrink-0 w-14 h-14 rounded-xl overflow-hidden bg-slate-100 border border-white/60">
+                              {p.images?.mobile?.[0]?.url ? <img src={p.images.mobile[0].url} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-lg">📦</div>}
                             </div>
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name || '이름 없음'}</p>
-                            <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-xs font-bold text-slate-600 truncate block max-w-[120px]">{sellerNames[p.sellerId] || p.sellerId || '-'}</span>
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-slate-400/15 text-slate-500 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${({scheduled:'bg-amber-500/15 text-amber-600 border-amber-300/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]',onSale:'bg-blue-500/15 text-blue-600 border-blue-300/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]',soldOut:'bg-red-500/15 text-red-500 border-red-300/50 shadow-[0_0_8px_rgba(239,68,68,0.3)]',completed:'bg-slate-400/15 text-slate-400 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'})[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
-                        </tr>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-extrabold text-slate-800 text-sm truncate">{p.name || '이름 없음'}</p>
+                              <p className="text-[9px] text-slate-400 font-mono mt-0.5">{p.id}</p>
+                              {p.sellerId && <p className="text-[10px] text-slate-500 font-bold mt-0.5 truncate">{sellerNames[p.sellerId] || p.sellerId}</p>}
+                            </div>
+                            <button onClick={() => openProductEditModal(p)} className="shrink-0 self-start text-[11px] font-bold text-blue-600 bg-white/60 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 transition-all">수정</button>
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({ normal: 'bg-slate-400/15 text-slate-500 border-slate-300/50', fund: 'bg-violet-500/15 text-violet-600 border-violet-300/50', subscription: 'bg-teal-500/15 text-teal-600 border-teal-300/50' })[p.type] || 'bg-slate-400/15 text-slate-400 border-slate-300/50'}`}>{({ normal: '일반', fund: '펀딩', subscription: '구독' })[p.type] || p.type || '-'}</span>
+                            <span className="text-xs font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</span>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50' : 'bg-slate-400/15 text-slate-500 border-slate-300/50'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
+                            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({ scheduled: 'bg-amber-500/15 text-amber-600 border-amber-300/50', onSale: 'bg-blue-500/15 text-blue-600 border-blue-300/50', soldOut: 'bg-red-500/15 text-red-500 border-red-300/50', completed: 'bg-slate-400/15 text-slate-400 border-slate-300/50' })[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
+                    </div>
+                    {/* 데스크톱 테이블 뷰 */}
+                    <table className="hidden md:table w-full text-left text-sm whitespace-nowrap">
+                      <thead className="bg-white/80 backdrop-blur-xl border-b border-white/60 text-slate-500 sticky top-0 z-10">
+                        <tr><th className="px-4 py-4 text-center w-[60px]">유형</th><th className="pl-6 pr-2 py-4 w-[52px]"></th><th className="px-4 py-4">상품 정보</th><th className="px-4 py-4">판매자</th><th className="px-4 py-4 text-right">가격</th><th className="px-4 py-4 text-center">진열</th><th className="px-4 py-4 text-center">상태</th><th className="px-4 py-4 text-center">관리</th></tr>
+                        <tr className="sticky top-[57px] z-10"><td colSpan={8}><div className="h-3 bg-gradient-to-b from-white/50 to-transparent pointer-events-none" /></td></tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/40">
+                        {displayedProducts.map(p => (
+                          <tr key={p.id} className="hover:bg-white/40 transition-colors group">
+                            <td className="px-4 py-3 text-center">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${({ normal: 'bg-slate-400/15 text-slate-500 border-slate-300/50', fund: 'bg-violet-500/15 text-violet-600 border-violet-300/50', subscription: 'bg-teal-500/15 text-teal-600 border-teal-300/50' })[p.type] || 'bg-slate-400/15 text-slate-400 border-slate-300/50'}`}>{({ normal: '일반', fund: '펀딩', subscription: '구독' })[p.type] || p.type || '-'}</span>
+                            </td>
+                            <td className="pl-6 pr-2 py-3">
+                              <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-100 border border-white/60 shrink-0">
+                                {p.images?.mobile?.[0]?.url ? <img src={p.images.mobile[0].url} alt="" className="w-full h-full object-cover" loading="lazy" /> : <div className="w-full h-full flex items-center justify-center text-slate-300 text-sm">📦</div>}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{p.name || '이름 없음'}</p>
+                              <p className="text-[10px] text-slate-400 font-mono mt-1">{p.id}</p>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="text-xs font-bold text-slate-600 truncate block max-w-[120px]">{sellerNames[p.sellerId] || p.sellerId || '-'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono font-bold text-slate-700">{p.price?.toLocaleString()} {p.currency || 'KRW'}</td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${p.isDisplayed ? 'bg-emerald-500/15 text-emerald-600 border-emerald-300/50 shadow-[0_0_8px_rgba(16,185,129,0.3)]' : 'bg-slate-400/15 text-slate-500 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]'}`}>{p.isDisplayed ? '진열중' : '숨김'}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border backdrop-blur-sm ${({ scheduled: 'bg-amber-500/15 text-amber-600 border-amber-300/50 shadow-[0_0_8px_rgba(245,158,11,0.3)]', onSale: 'bg-blue-500/15 text-blue-600 border-blue-300/50 shadow-[0_0_8px_rgba(59,130,246,0.3)]', soldOut: 'bg-red-500/15 text-red-500 border-red-300/50 shadow-[0_0_8px_rgba(239,68,68,0.3)]', completed: 'bg-slate-400/15 text-slate-400 border-slate-300/50 shadow-[0_0_8px_rgba(148,163,184,0.3)]' })[p.status] || 'bg-white/50 text-slate-500 border-white/60'}`}>{translateStatus(p.status)}</span>
+                            </td>
+                            <td className="px-4 py-3 text-center"><button onClick={() => openProductEditModal(p)} className="text-xs font-bold text-blue-600 bg-white/50 px-3 py-1.5 rounded-lg border border-white/60 hover:bg-white active:bg-blue-50 active:scale-95 active:shadow-inner transition-all">수정</button></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </>)}
                   {/* 페이지네이션 */}
                   {products.length > 0 && (
@@ -1508,11 +1508,10 @@ export default function App() {
                             className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">‹</button>
                           {getPageNumbers().map(n => (
                             <button key={n} onClick={() => setCurrentPage(n)}
-                              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all active:scale-95 active:shadow-inner ${
-                                n === currentPage
-                                  ? 'bg-blue-500 text-white border-blue-400 shadow-md active:bg-blue-700'
-                                  : 'bg-white/50 border-white/60 hover:bg-white/80 active:bg-white/40 text-slate-600'
-                              }`}>{n}</button>
+                              className={`px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all active:scale-95 active:shadow-inner ${n === currentPage
+                                ? 'bg-blue-500 text-white border-blue-400 shadow-md active:bg-blue-700'
+                                : 'bg-white/50 border-white/60 hover:bg-white/80 active:bg-white/40 text-slate-600'
+                                }`}>{n}</button>
                           ))}
                           <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages}
                             className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-white/50 border border-white/60 hover:bg-white/80 active:bg-white/40 active:scale-95 active:shadow-inner disabled:opacity-30 transition-all text-slate-500">›</button>
@@ -1552,215 +1551,215 @@ export default function App() {
                         historyLogs
                           .filter(log => loginMode === 'admin' ? true : (log.sellerId && sellerProfiles.some(p => p.id === log.sellerId)))
                           .map((log, idx) => (
-                          <div key={idx} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white/80 transition-all">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold text-white shadow-sm ${log.success ? 'bg-green-500' : 'bg-red-500'}`}>
-                                {log.success ? '성공' : '에러'}
-                              </span>
-                              <span className="font-extrabold text-sm md:text-base text-slate-800">{log.productName || '알 수 없는 상품'}</span>
-                              {loginMode === 'admin' && log.sellerId && (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600 border border-purple-200">{sellerNames[log.sellerId] || log.sellerId}</span>
-                              )}
-                            </div>
-                            <p className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
-                              <span>{log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}</span>
-                              {log.delayMs != null && (
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${log.delayMs < 10000 ? 'bg-green-100 text-green-600' : log.delayMs < 30000 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
-                                  +{log.delayMs < 1000 ? `${log.delayMs}ms` : `${(log.delayMs / 1000).toFixed(1)}s`} 딜레이
+                            <div key={idx} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white/80 transition-all">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold text-white shadow-sm ${log.success ? 'bg-green-500' : 'bg-red-500'}`}>
+                                  {log.success ? '성공' : '에러'}
                                 </span>
-                              )}
-                            </p>
-                            {(log.newStatus || log.currentStatus) && (
-                              <div className="mt-2 flex items-center gap-2 text-xs font-bold">
-                                {log.currentStatus ? (
-                                  <>
-                                    <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(log.currentStatus)} · {log.currentIsDisplayed ? '진열' : '숨김'}</span>
-                                    <span className="text-slate-300">→</span>
-                                    <span className={`px-2 py-0.5 rounded-lg border ${log.success ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>{translateStatus(log.newStatus)} · {log.newIsDisplayed ? '진열' : '숨김'}</span>
-                                  </>
-                                ) : log.newStatus && (
-                                  <span className={`px-2 py-0.5 rounded-lg border ${log.success ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>{translateStatus(log.newStatus)} · {log.newIsDisplayed ? '진열' : '숨김'}</span>
+                                <span className="font-extrabold text-sm md:text-base text-slate-800">{log.productName || '알 수 없는 상품'}</span>
+                                {loginMode === 'admin' && log.sellerId && (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-600 border border-purple-200">{sellerNames[log.sellerId] || log.sellerId}</span>
                                 )}
                               </div>
-                            )}
-                            <div className="mt-2 text-xs text-slate-600 bg-white/60 px-3 py-2 rounded-xl border border-white/50 shadow-inner break-words">
-                              {log.message || (log.success ? '예약된 상태 변경이 정상적으로 완료되었습니다.' : '알 수 없는 AWS 측 오류가 발생했습니다.')}
+                              <p className="text-[10px] text-slate-400 font-mono flex items-center gap-2">
+                                <span>{log.executedAt ? new Date(log.executedAt).toLocaleString() : '시간 기록 없음'}</span>
+                                {log.delayMs != null && (
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${log.delayMs < 10000 ? 'bg-green-100 text-green-600' : log.delayMs < 30000 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
+                                    +{log.delayMs < 1000 ? `${log.delayMs}ms` : `${(log.delayMs / 1000).toFixed(1)}s`} 딜레이
+                                  </span>
+                                )}
+                              </p>
+                              {(log.newStatus || log.currentStatus) && (
+                                <div className="mt-2 flex items-center gap-2 text-xs font-bold">
+                                  {log.currentStatus ? (
+                                    <>
+                                      <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(log.currentStatus)} · {log.currentIsDisplayed ? '진열' : '숨김'}</span>
+                                      <span className="text-slate-300">→</span>
+                                      <span className={`px-2 py-0.5 rounded-lg border ${log.success ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>{translateStatus(log.newStatus)} · {log.newIsDisplayed ? '진열' : '숨김'}</span>
+                                    </>
+                                  ) : log.newStatus && (
+                                    <span className={`px-2 py-0.5 rounded-lg border ${log.success ? 'bg-green-50 text-green-600 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>{translateStatus(log.newStatus)} · {log.newIsDisplayed ? '진열' : '숨김'}</span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="mt-2 text-xs text-slate-600 bg-white/60 px-3 py-2 rounded-xl border border-white/50 shadow-inner break-words">
+                                {log.message || (log.success ? '예약된 상태 변경이 정상적으로 완료되었습니다.' : '알 수 없는 AWS 측 오류가 발생했습니다.')}
+                              </div>
                             </div>
-                          </div>
-                        ))
+                          ))
                       )}
                     </div>
                   </div>
                 )}
 
                 {scheduleSubTab === 'creator' && <>
-                {/* ⭐️ 예약 생성기 전체 패널 컨테이너 */}
-                <div className={`shrink-0 ${glassPanel} p-5 md:p-6 flex flex-col relative z-20`}>
-                  <h3 className="font-extrabold text-base md:text-lg text-slate-800 mb-6">예약 생성기</h3>
-                  <form onSubmit={handlePreSubmit} className="space-y-4">
-                    <div className="relative z-[60]" ref={productSelectRef}>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">1. 대상 상품 검색 (다중)</label>
-                      <div className="relative">
-                        <input 
-                          type="text" 
-                          placeholder="상품명 또는 ID 입력" 
-                          value={productSearchTerm} 
-                          onChange={e => {setProductSearchTerm(e.target.value); setIsProductSelectOpen(true); setProductFocusIndex(-1);}} 
-                          onFocus={() => setIsProductSelectOpen(true)} 
-                          onKeyDown={handleProductKeyDown} 
-                          className={glassInput} 
-                        />
-                        {isProductSelectOpen && (() => {
-                          const selectedIds = new Set(scheduleForm.products.map(p => p.id));
-                          const available = productSearchResults.filter(p => !selectedIds.has(p.id)).slice(0, 50);
-                          return (
-                            <div className="absolute left-0 right-0 top-full mt-1.5 bg-white/90 backdrop-blur-2xl border border-white/60 shadow-xl rounded-2xl z-[70] max-h-56 overflow-y-auto p-2 animate-fade-in-fast">
-                              {available.length === 0 ? (
-                                <div className="px-3 py-4 text-sm text-slate-400 font-bold text-center">{productSearchTerm ? '검색 결과 없음' : '선택 가능한 상품 없음'}</div>
-                              ) : available.map((p, idx) => (
-                                <button key={p.id} type="button" onClick={() => { handleSelectProduct(p); setProductFocusIndex(-1); }}
-                                  ref={idx === productFocusIndex ? (el) => { if (el) el.scrollIntoView({ block: 'nearest' }); } : undefined}
-                                  className={`w-full text-left px-3 py-2 rounded-xl text-sm active:bg-blue-100 active:scale-[0.98] transition-all mb-1 flex justify-between items-center gap-2 ${idx === productFocusIndex ? 'bg-blue-100 ring-1 ring-blue-300' : 'hover:bg-blue-50'}`}>
-                                  <span className={`font-bold truncate ${idx === productFocusIndex ? 'text-blue-700' : 'text-slate-700'}`}>{p.name}</span>
-                                  <span className="text-[9px] text-slate-400 font-mono shrink-0">{p.id}</span>
-                                </button>
-                              ))}
-                              {productSearchResults.filter(p => !selectedIds.has(p.id)).length > 50 && <div className="px-3 py-2 text-[10px] text-slate-400 font-bold text-center">외 {productSearchResults.filter(p => !selectedIds.has(p.id)).length - 50}개 — 검색어를 입력하세요</div>}
-                            </div>
-                          );
-                        })()}
-                      </div>
-
-                      {/* 상품 ID 수동 입력 */}
-                      <div className="mt-2 flex gap-2">
-                        <input
-                          type="text"
-                          placeholder="상품 ID 직접 입력 (숨김 상품 등)"
-                          value={manualProductId}
-                          onChange={e => setManualProductId(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddProductById(); } }}
-                          className={glassInput + ' flex-1 text-xs'}
-                        />
-                        <button type="button" onClick={handleAddProductById} disabled={isManualLoading}
-                          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${isManualLoading ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-violet-500 text-white border-violet-400 shadow-md hover:bg-violet-600'}`}>
-                          {isManualLoading ? '조회중...' : 'ID로 추가'}
-                        </button>
-                      </div>
-
-                      {/* ⭐️ 글래스몰피즘 디자인이 완벽히 적용된 선택 상품 데이터 테이블 */}
-                      {scheduleForm.products.length > 0 && (
-                        <div className="mt-3 border border-white/50 rounded-2xl bg-white/30 backdrop-blur-md overflow-hidden shadow-inner relative group">
-                          <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
-                            <table className="w-full text-left text-xs whitespace-nowrap">
-                              <thead className="bg-white/40 backdrop-blur-md border-b border-white/50 sticky top-0 z-10">
-                                <tr>
-                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">대상 상품</th>
-                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">상태</th>
-                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">진열</th>
-                                  <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">관리</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-white/30">
-                                {scheduleForm.products.map(prod => (
-                                  <tr key={prod.id} className="hover:bg-white/40 transition-colors">
-                                    <td className="px-4 py-3 max-w-[140px] sm:max-w-[200px] truncate">
-                                      <p className="font-extrabold text-slate-700 truncate" title={prod.name}>{prod.name}</p>
-                                      <p className="text-[9px] text-slate-400 font-mono mt-0.5">{prod.id}</p>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/50 shadow-sm border border-white/60 text-slate-600 inline-block">
-                                        {translateStatus(prod.status)}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/50 shadow-sm border border-white/60 text-slate-600 inline-block">
-                                        {prod.isDisplayed !== false ? '표시' : '숨김'}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-3 text-center">
-                                      <button 
-                                        type="button" 
-                                        onClick={() => handleRemoveProduct(prod.id)} 
-                                        className="w-7 h-7 mx-auto flex items-center justify-center rounded-xl bg-white/50 border border-white/60 text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm active:scale-95"
-                                        title="목록에서 제거"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-                                      </button>
-                                    </td>
-                                  </tr>
+                  {/* ⭐️ 예약 생성기 전체 패널 컨테이너 */}
+                  <div className={`shrink-0 ${glassPanel} p-5 md:p-6 flex flex-col relative z-20`}>
+                    <h3 className="font-extrabold text-base md:text-lg text-slate-800 mb-6">예약 생성기</h3>
+                    <form onSubmit={handlePreSubmit} className="space-y-4">
+                      <div className="relative z-[60]" ref={productSelectRef}>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">1. 대상 상품 검색 (다중)</label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            placeholder="상품명 또는 ID 입력"
+                            value={productSearchTerm}
+                            onChange={e => { setProductSearchTerm(e.target.value); setIsProductSelectOpen(true); setProductFocusIndex(-1); }}
+                            onFocus={() => setIsProductSelectOpen(true)}
+                            onKeyDown={handleProductKeyDown}
+                            className={glassInput}
+                          />
+                          {isProductSelectOpen && (() => {
+                            const selectedIds = new Set(scheduleForm.products.map(p => p.id));
+                            const available = productSearchResults.filter(p => !selectedIds.has(p.id)).slice(0, 50);
+                            return (
+                              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white/90 backdrop-blur-2xl border border-white/60 shadow-xl rounded-2xl z-[70] max-h-56 overflow-y-auto p-2 animate-fade-in-fast">
+                                {available.length === 0 ? (
+                                  <div className="px-3 py-4 text-sm text-slate-400 font-bold text-center">{productSearchTerm ? '검색 결과 없음' : '선택 가능한 상품 없음'}</div>
+                                ) : available.map((p, idx) => (
+                                  <button key={p.id} type="button" onClick={() => { handleSelectProduct(p); setProductFocusIndex(-1); }}
+                                    ref={idx === productFocusIndex ? (el) => { if (el) el.scrollIntoView({ block: 'nearest' }); } : undefined}
+                                    className={`w-full text-left px-3 py-2 rounded-xl text-sm active:bg-blue-100 active:scale-[0.98] transition-all mb-1 flex justify-between items-center gap-2 ${idx === productFocusIndex ? 'bg-blue-100 ring-1 ring-blue-300' : 'hover:bg-blue-50'}`}>
+                                    <span className={`font-bold truncate ${idx === productFocusIndex ? 'text-blue-700' : 'text-slate-700'}`}>{p.name}</span>
+                                    <span className="text-[9px] text-slate-400 font-mono shrink-0">{p.id}</span>
+                                  </button>
                                 ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                {productSearchResults.filter(p => !selectedIds.has(p.id)).length > 50 && <div className="px-3 py-2 text-[10px] text-slate-400 font-bold text-center">외 {productSearchResults.filter(p => !selectedIds.has(p.id)).length - 50}개 — 검색어를 입력하세요</div>}
+                              </div>
+                            );
+                          })()}
                         </div>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-[50]">
-                      <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">2. 변경 상태</label><GlassSelect value={scheduleForm.status} options={statusOptions} onChange={val => setScheduleForm({...scheduleForm, status: val})} /></div>
-                      <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">3. 진열 여부</label><GlassSelect value={scheduleForm.isDisplayed} options={displayOptions} onChange={val => setScheduleForm({...scheduleForm, isDisplayed: val})} /></div>
-                    </div>
-                    <div className="relative z-[40]">
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">4. 실행 일시</label>
-                      <div onClick={() => { const now = getCurrentLocalISOString(); setPickerDate(now.split('T')[0]); setPickerTime(now.split('T')[1]); setIsDatePickerOpen(true); }} className={glassInput + " cursor-pointer flex justify-between items-center group"}>
-                        <span className={confirmedDateTime ? 'text-slate-800 font-extrabold' : 'text-slate-400'}>{confirmedDateTime ? new Date(confirmedDateTime).toLocaleString() : '클릭하여 일시 선택'}</span>
-                        <span className="text-slate-400 group-hover:text-blue-500 transition-colors">📅</span>
+
+                        {/* 상품 ID 수동 입력 */}
+                        <div className="mt-2 flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="상품 ID 직접 입력 (숨김 상품 등)"
+                            value={manualProductId}
+                            onChange={e => setManualProductId(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddProductById(); } }}
+                            className={glassInput + ' flex-1 text-xs'}
+                          />
+                          <button type="button" onClick={handleAddProductById} disabled={isManualLoading}
+                            className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${isManualLoading ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-violet-500 text-white border-violet-400 shadow-md hover:bg-violet-600'}`}>
+                            {isManualLoading ? '조회중...' : 'ID로 추가'}
+                          </button>
+                        </div>
+
+                        {/* ⭐️ 글래스몰피즘 디자인이 완벽히 적용된 선택 상품 데이터 테이블 */}
+                        {scheduleForm.products.length > 0 && (
+                          <div className="mt-3 border border-white/50 rounded-2xl bg-white/30 backdrop-blur-md overflow-hidden shadow-inner relative group">
+                            <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
+                              <table className="w-full text-left text-xs whitespace-nowrap">
+                                <thead className="bg-white/40 backdrop-blur-md border-b border-white/50 sticky top-0 z-10">
+                                  <tr>
+                                    <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest">대상 상품</th>
+                                    <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">상태</th>
+                                    <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">진열</th>
+                                    <th className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center w-12">관리</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/30">
+                                  {scheduleForm.products.map(prod => (
+                                    <tr key={prod.id} className="hover:bg-white/40 transition-colors">
+                                      <td className="px-4 py-3 max-w-[140px] sm:max-w-[200px] truncate">
+                                        <p className="font-extrabold text-slate-700 truncate" title={prod.name}>{prod.name}</p>
+                                        <p className="text-[9px] text-slate-400 font-mono mt-0.5">{prod.id}</p>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/50 shadow-sm border border-white/60 text-slate-600 inline-block">
+                                          {translateStatus(prod.status)}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-white/50 shadow-sm border border-white/60 text-slate-600 inline-block">
+                                          {prod.isDisplayed !== false ? '표시' : '숨김'}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRemoveProduct(prod.id)}
+                                          className="w-7 h-7 mx-auto flex items-center justify-center rounded-xl bg-white/50 border border-white/60 text-slate-400 hover:text-red-500 hover:bg-red-50 hover:border-red-200 transition-all shadow-sm active:scale-95"
+                                          title="목록에서 제거"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    <button type="submit" className={glassButtonPrimary}>예약 정보 클라우드 전송</button>
-                  </form>
-
-                  {/* ⭐️ 예약 생성기 캘린더 모듈 위치 지정 코드 */}
-                  {isDatePickerOpen && (
-                    <>
-                      <div className="fixed inset-0 z-[900] bg-slate-900/10 md:bg-transparent" onClick={() => setIsDatePickerOpen(false)}></div>
-                      <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 md:absolute md:inset-auto md:top-16 md:right-20 pointer-events-none"><div className="pointer-events-auto">
-                        <GlassDateTimePicker
-                          date={pickerDate}
-                          time={pickerTime}
-                          onDateChange={setPickerDate}
-                          onTimeChange={setPickerTime}
-                          onConfirm={handleConfirmDatePicker}
-                          onCancel={() => setIsDatePickerOpen(false)}
-                        />
-                      </div></div>
-                    </>
-                  )}
-
-                </div>
-                <div className={`flex-1 min-h-[400px] shrink-0 ${glassPanel} p-5 md:p-6 flex flex-col overflow-hidden relative z-10`}>
-                  <div className="flex justify-between items-center mb-6 border-b border-white/40 pb-4">
-                    <h3 className="font-extrabold text-slate-800 text-lg">클라우드 대기열 <span className="text-xs text-blue-500 ml-2 font-bold">(창을 닫아도 무방합니다)</span></h3>
-                    <button onClick={() => fetchScheduledTasks(token)} className={glassButtonSecondary}>갱신</button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
-                    {displayedTasks.map(t => (
-                      <div key={t.id} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white transition-all group">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{t.productName}</p>
-                            <p className="text-[10px] text-slate-400 font-bold mt-1">{new Date(t.executeAt).toLocaleString()}</p>
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            <button onClick={() => openEditModal(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.edit}`}>수정</button>
-                            <button onClick={() => handleDeleteTask(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.delete}`}>삭제</button>
-                          </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-[50]">
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">2. 변경 상태</label><GlassSelect value={scheduleForm.status} options={statusOptions} onChange={val => setScheduleForm({ ...scheduleForm, status: val })} /></div>
+                        <div><label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">3. 진열 여부</label><GlassSelect value={scheduleForm.isDisplayed} options={displayOptions} onChange={val => setScheduleForm({ ...scheduleForm, isDisplayed: val })} /></div>
+                      </div>
+                      <div className="relative z-[40]">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 ml-1">4. 실행 일시</label>
+                        <div onClick={() => { const now = getCurrentLocalISOString(); setPickerDate(now.split('T')[0]); setPickerTime(now.split('T')[1]); setIsDatePickerOpen(true); }} className={glassInput + " cursor-pointer flex justify-between items-center group"}>
+                          <span className={confirmedDateTime ? 'text-slate-800 font-extrabold' : 'text-slate-400'}>{confirmedDateTime ? new Date(confirmedDateTime).toLocaleString() : '클릭하여 일시 선택'}</span>
+                          <span className="text-slate-400 group-hover:text-blue-500 transition-colors">📅</span>
                         </div>
-                        <div className="mt-2 flex items-center gap-2 text-xs font-bold">
-                          {t.currentStatus ? (
-                            <>
-                              <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(t.currentStatus)} · {t.currentIsDisplayed ? '진열' : '숨김'}</span>
-                              <span className="text-slate-300">→</span>
+                      </div>
+                      <button type="submit" className={glassButtonPrimary}>예약 정보 클라우드 전송</button>
+                    </form>
+
+                    {/* ⭐️ 예약 생성기 캘린더 모듈 위치 지정 코드 */}
+                    {isDatePickerOpen && (
+                      <>
+                        <div className="fixed inset-0 z-[900] bg-slate-900/10 md:bg-transparent" onClick={() => setIsDatePickerOpen(false)}></div>
+                        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4 md:absolute md:inset-auto md:top-16 md:right-20 pointer-events-none"><div className="pointer-events-auto">
+                          <GlassDateTimePicker
+                            date={pickerDate}
+                            time={pickerTime}
+                            onDateChange={setPickerDate}
+                            onTimeChange={setPickerTime}
+                            onConfirm={handleConfirmDatePicker}
+                            onCancel={() => setIsDatePickerOpen(false)}
+                          />
+                        </div></div>
+                      </>
+                    )}
+
+                  </div>
+                  <div className={`flex-1 min-h-[400px] shrink-0 ${glassPanel} p-5 md:p-6 flex flex-col overflow-hidden relative z-10`}>
+                    <div className="flex justify-between items-center mb-6 border-b border-white/40 pb-4">
+                      <h3 className="font-extrabold text-slate-800 text-lg">클라우드 대기열 <span className="text-xs text-blue-500 ml-2 font-bold">(창을 닫아도 무방합니다)</span></h3>
+                      <button onClick={() => fetchScheduledTasks(token)} className={glassButtonSecondary}>갱신</button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
+                      {displayedTasks.map(t => (
+                        <div key={t.id} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white transition-all group">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{t.productName}</p>
+                              <p className="text-[10px] text-slate-400 font-bold mt-1">{new Date(t.executeAt).toLocaleString()}</p>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button onClick={() => openEditModal(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.edit}`}>수정</button>
+                              <button onClick={() => handleDeleteTask(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.delete}`}>삭제</button>
+                            </div>
+                          </div>
+                          <div className="mt-2 flex items-center gap-2 text-xs font-bold">
+                            {t.currentStatus ? (
+                              <>
+                                <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(t.currentStatus)} · {t.currentIsDisplayed ? '진열' : '숨김'}</span>
+                                <span className="text-slate-300">→</span>
+                                <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
+                              </>
+                            ) : (
                               <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
-                            </>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
-                          )}
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                    {displayedTasks.length === 0 && !isLoading && <div className="py-20 text-center text-slate-300 font-bold">등록된 예약 정보가 없습니다.</div>}
+                      ))}
+                      {displayedTasks.length === 0 && !isLoading && <div className="py-20 text-center text-slate-300 font-bold">등록된 예약 정보가 없습니다.</div>}
+                    </div>
                   </div>
-                </div>
                 </>}
               </div>
             )}
@@ -1788,7 +1787,7 @@ export default function App() {
             )}
           </div>
         </main>
-        
+
         {/* 수정 모달 (Product Edit) */}
         {productEditModal.isOpen && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
@@ -1799,16 +1798,16 @@ export default function App() {
                 <button onClick={closeProductEditModal} className="text-slate-400 hover:text-slate-800 active:scale-90 active:text-slate-900 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg></button>
               </div>
               <div className="p-6 space-y-5 overflow-y-auto custom-scrollbar flex-1">
-                <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">상품명</label><input type="text" value={productEditModal.name} onChange={e => setProductEditModal({...productEditModal, name: e.target.value})} className={glassInput} /></div>
+                <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">상품명</label><input type="text" value={productEditModal.name} onChange={e => setProductEditModal({ ...productEditModal, name: e.target.value })} className={glassInput} /></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">가격 (KRW)</label><input type="number" value={productEditModal.price} onChange={e => setProductEditModal({...productEditModal, price: e.target.value})} className={`${glassInput} font-mono`} /></div>
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">가격 (KRW)</label><input type="number" value={productEditModal.price} onChange={e => setProductEditModal({ ...productEditModal, price: e.target.value })} className={`${glassInput} font-mono`} /></div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">재고 설정</label>
                     <div className="flex items-center gap-4 bg-white/50 px-4 py-3 rounded-2xl border border-white/60 mb-2 shadow-sm">
-                      <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer text-slate-700"><input type="radio" name="stype" checked={productEditModal.stockType === 'unlimited'} onChange={() => setProductEditModal({...productEditModal, stockType: 'unlimited', stockCount: ''})} /> 무제한</label>
-                      <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer text-slate-700"><input type="radio" name="stype" checked={productEditModal.stockType === 'limited'} onChange={() => setProductEditModal({...productEditModal, stockType: 'limited'})} /> 수량제한</label>
+                      <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer text-slate-700"><input type="radio" name="stype" checked={productEditModal.stockType === 'unlimited'} onChange={() => setProductEditModal({ ...productEditModal, stockType: 'unlimited', stockCount: '' })} /> 무제한</label>
+                      <label className="flex items-center gap-1.5 text-xs font-bold cursor-pointer text-slate-700"><input type="radio" name="stype" checked={productEditModal.stockType === 'limited'} onChange={() => setProductEditModal({ ...productEditModal, stockType: 'limited' })} /> 수량제한</label>
                     </div>
-                    {productEditModal.stockType === 'limited' && <input type="number" value={productEditModal.stockCount} onChange={e => setProductEditModal({...productEditModal, stockCount: e.target.value})} className={glassInput + " font-mono"} placeholder="수량 입력" />}
+                    {productEditModal.stockType === 'limited' && <input type="number" value={productEditModal.stockCount} onChange={e => setProductEditModal({ ...productEditModal, stockCount: e.target.value })} className={glassInput + " font-mono"} placeholder="수량 입력" />}
                   </div>
                 </div>
                 <div className="bg-white/40 p-5 rounded-2xl border border-white/60 shadow-inner">
@@ -1817,30 +1816,27 @@ export default function App() {
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">진열 여부</label>
                       <div className="relative flex w-full p-1.5 bg-white/50 border border-white/60 rounded-2xl shadow-inner overflow-hidden cursor-pointer group">
-                        <div 
-                          className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-md overflow-hidden ${
-                            productEditModal.isDisplayed === 'true' 
-                              ? 'left-1.5 bg-blue-500 shadow-blue-500/30' 
-                              : 'left-[calc(50%+3px)] bg-purple-500 shadow-purple-500/30'
-                          }`}
+                        <div
+                          className={`absolute top-1.5 bottom-1.5 w-[calc(50%-6px)] rounded-xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] shadow-md overflow-hidden ${productEditModal.isDisplayed === 'true'
+                            ? 'left-1.5 bg-blue-500 shadow-blue-500/30'
+                            : 'left-[calc(50%+3px)] bg-purple-500 shadow-purple-500/30'
+                            }`}
                         >
                           <div className="absolute inset-0 -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 ease-in-out bg-gradient-to-r from-transparent via-white/30 to-transparent skew-x-12"></div>
                         </div>
-                        <button 
-                          type="button" 
-                          onClick={() => setProductEditModal({...productEditModal, isDisplayed: 'true'})}
-                          className={`relative z-10 flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-300 active:scale-95 ${
-                            productEditModal.isDisplayed === 'true' ? 'text-white drop-shadow-md' : 'text-slate-500 hover:text-slate-800'
-                          }`}
+                        <button
+                          type="button"
+                          onClick={() => setProductEditModal({ ...productEditModal, isDisplayed: 'true' })}
+                          className={`relative z-10 flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-300 active:scale-95 ${productEditModal.isDisplayed === 'true' ? 'text-white drop-shadow-md' : 'text-slate-500 hover:text-slate-800'
+                            }`}
                         >
                           진열 표시
                         </button>
-                        <button 
-                          type="button" 
-                          onClick={() => setProductEditModal({...productEditModal, isDisplayed: 'false'})}
-                          className={`relative z-10 flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-300 active:scale-95 ${
-                            productEditModal.isDisplayed === 'false' ? 'text-white drop-shadow-md' : 'text-slate-500 hover:text-slate-800'
-                          }`}
+                        <button
+                          type="button"
+                          onClick={() => setProductEditModal({ ...productEditModal, isDisplayed: 'false' })}
+                          className={`relative z-10 flex-1 py-2.5 text-xs font-extrabold rounded-xl transition-all duration-300 active:scale-95 ${productEditModal.isDisplayed === 'false' ? 'text-white drop-shadow-md' : 'text-slate-500 hover:text-slate-800'
+                            }`}
                         >
                           숨김 (미진열)
                         </button>
@@ -1849,16 +1845,16 @@ export default function App() {
                     <div>
                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block ml-1">판매 상태</label>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white/50 px-4 py-3 rounded-xl border border-white/60 shadow-sm">
-                        {[ {l:'판매 예정', v:'scheduled'}, {l:'판매 중', v:'onSale'}, {l:'품절', v:'soldOut'}, {l:'종료', v:'completed'} ].map(s => (
+                        {[{ l: '판매 예정', v: 'scheduled' }, { l: '판매 중', v: 'onSale' }, { l: '품절', v: 'soldOut' }, { l: '종료', v: 'completed' }].map(s => (
                           <label key={s.v} className="flex items-center gap-1.5 text-xs cursor-pointer font-bold text-slate-700 hover:text-blue-600 transition-colors">
-                            <input type="radio" name="editStatus" value={s.v} checked={productEditModal.status === s.v} onChange={e => setProductEditModal({...productEditModal, status: e.target.value})} className="accent-blue-600 w-3.5 h-3.5" /> {s.l}
+                            <input type="radio" name="editStatus" value={s.v} checked={productEditModal.status === s.v} onChange={e => setProductEditModal({ ...productEditModal, status: e.target.value })} className="accent-blue-600 w-3.5 h-3.5" /> {s.l}
                           </label>
                         ))}
                       </div>
                     </div>
                   </div>
                 </div>
-                <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">상세 설명</label><textarea value={productEditModal.description} onChange={e => setProductEditModal({...productEditModal, description: e.target.value})} className={glassInput + " resize-none h-24 custom-scrollbar"} /></div>
+                <div><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 ml-1 block">상세 설명</label><textarea value={productEditModal.description} onChange={e => setProductEditModal({ ...productEditModal, description: e.target.value })} className={glassInput + " resize-none h-24 custom-scrollbar"} /></div>
               </div>
               <div className="px-6 py-5 border-t border-white/40 flex justify-end gap-2 bg-white/30 shrink-0">
                 <button onClick={closeProductEditModal} className={glassButtonSecondary}>취소</button>
@@ -1894,33 +1890,33 @@ export default function App() {
         {/* 예약 내역 수정 모달 */}
         {editModal.isOpen && (
           <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setEditModal({...editModal, isOpen: false})}></div>
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setEditModal({ ...editModal, isOpen: false })}></div>
             <div className="bg-white/90 backdrop-blur-2xl rounded-3xl w-full max-w-md p-8 shadow-2xl z-10 border border-white/50 relative animate-fade-in-fast">
               <h3 className="text-xl font-extrabold mb-6 text-slate-800 border-b border-slate-200 pb-3 font-sans">예약 수정</h3>
               <div className="space-y-5 mb-8">
                 <div className="bg-white/50 p-4 rounded-xl border border-white/60"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1 block">대상 상품</label><p className="text-sm font-extrabold text-slate-700">{editModal.task.productName}</p></div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">상태 변경</label><GlassSelect value={editModal.status} options={statusOptions} onChange={v => setEditModal({...editModal, status: v})} /></div>
-                  <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">진열 여부</label><GlassSelect value={editModal.isDisplayed} options={displayOptions} onChange={v => setEditModal({...editModal, isDisplayed: v})} /></div>
+                  <div><label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">상태 변경</label><GlassSelect value={editModal.status} options={statusOptions} onChange={v => setEditModal({ ...editModal, status: v })} /></div>
+                  <div><label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">진열 여부</label><GlassSelect value={editModal.isDisplayed} options={displayOptions} onChange={v => setEditModal({ ...editModal, isDisplayed: v })} /></div>
                 </div>
                 <div className="relative">
                   <label className="text-[10px] font-bold text-slate-400 uppercase mb-1.5 block">시각 변경</label>
-                  <div onClick={() => setEditModal({...editModal, isDatePickerOpen: true})} className={glassInput + " cursor-pointer flex justify-between items-center group"}>
+                  <div onClick={() => setEditModal({ ...editModal, isDatePickerOpen: true })} className={glassInput + " cursor-pointer flex justify-between items-center group"}>
                     <span className="font-extrabold text-slate-800">{editModal.date && editModal.time ? new Date(`${editModal.date}T${editModal.time}`).toLocaleString() : '시각 선택'}</span>
                     <span>📅</span>
                   </div>
                   {editModal.isDatePickerOpen && (
                     <>
-                      <div className="fixed inset-0 z-[900]" onClick={() => setEditModal({...editModal, isDatePickerOpen: false})}></div>
+                      <div className="fixed inset-0 z-[900]" onClick={() => setEditModal({ ...editModal, isDatePickerOpen: false })}></div>
                       <div className="absolute top-1/2 right-12 -translate-y-1/2 -mt-28 z-[1000]">
-                        <GlassDateTimePicker date={editModal.date} time={editModal.time} onDateChange={d => setEditModal(prev => ({...prev, date: d}))} onTimeChange={t => setEditModal(prev => ({...prev, time: t}))} onConfirm={(d, t) => setEditModal(prev => ({...prev, date: d || prev.date, time: t || prev.time, isDatePickerOpen: false}))} onCancel={() => setEditModal(prev => ({...prev, isDatePickerOpen: false}))} />
+                        <GlassDateTimePicker date={editModal.date} time={editModal.time} onDateChange={d => setEditModal(prev => ({ ...prev, date: d }))} onTimeChange={t => setEditModal(prev => ({ ...prev, time: t }))} onConfirm={(d, t) => setEditModal(prev => ({ ...prev, date: d || prev.date, time: t || prev.time, isDatePickerOpen: false }))} onCancel={() => setEditModal(prev => ({ ...prev, isDatePickerOpen: false }))} />
                       </div>
                     </>
                   )}
                 </div>
               </div>
               <div className="flex justify-end gap-3 border-t border-slate-200 pt-5">
-                <button onClick={() => setEditModal({...editModal, isOpen: false})} className={glassButtonSecondary}>취소</button>
+                <button onClick={() => setEditModal({ ...editModal, isOpen: false })} className={glassButtonSecondary}>취소</button>
                 <button onClick={handleConfirmEdit} className={`px-6 py-2.5 rounded-xl font-extrabold shadow-md transition-all ${colorVariants.blue}`}>수정 저장하기</button>
               </div>
             </div>
