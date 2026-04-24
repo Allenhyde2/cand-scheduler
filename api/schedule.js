@@ -11,16 +11,21 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    const qstashToken = process.env.QSTASH_TOKEN;
+    // ⭐️ [수정됨] .trim()을 추가하여 복사/붙여넣기 시 들어간 공백을 제거합니다.
+    const qstashToken = process.env.QSTASH_TOKEN?.trim();
+    const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+    const awsSecretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+    const awsRegion = process.env.AWS_REGION?.trim() || "ap-southeast-2";
+
     if (!qstashToken) throw new Error("환경 변수에 QSTASH_TOKEN이 누락되었습니다.");
-    if (!process.env.AWS_ACCESS_KEY_ID) throw new Error("환경 변수에 AWS_ACCESS_KEY_ID가 누락되었습니다.");
+    if (!awsAccessKeyId) throw new Error("환경 변수에 AWS_ACCESS_KEY_ID가 누락되었습니다.");
 
     // AWS DynamoDB 클라이언트 초기화
     const dbClient = new DynamoDBClient({ 
-      region: process.env.AWS_REGION || "ap-southeast-2",
+      region: awsRegion,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        accessKeyId: awsAccessKeyId,
+        secretAccessKey: awsSecretKey
       }
     });
     const docClient = DynamoDBDocumentClient.from(dbClient);
