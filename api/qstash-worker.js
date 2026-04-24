@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     }
 
     isSuccess = true;
-    resultMessage = "QStash를 통해 지연 시간(0s) 없이 정상적으로 상태가 변경되었습니다.";
+    resultMessage = "정상적으로 상태가 변경되었습니다.";
 
   } catch (error) {
     isSuccess = false;
