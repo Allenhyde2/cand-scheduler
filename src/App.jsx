@@ -1058,7 +1058,10 @@ export default function App() {
             currentStatus: prod.status || '', currentIsDisplayed: prod.isDisplayed
           })
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || errData.message || `서버 응답 에러 (${res.status})`);
+        }
         const resData = await res.json();
         newTasks.push({
           id: newTaskId, messageId: resData.messageId, productId: prod.id, productName: prod.name,
@@ -1076,7 +1079,7 @@ export default function App() {
 
       setScheduleForm({ ...scheduleForm, products: [] });
       showToast(`${scheduleForm.products.length}건의 상품 예약이 전송되었습니다!`, 'success');
-    } catch (err) { showToast('예약 전송 중 오류가 발생했습니다.', 'error'); }
+    } catch (err) { showToast(`예약 실패: ${err.message}`, 'error'); }
   };
 
   const handleDeleteTask = async (task) => {
