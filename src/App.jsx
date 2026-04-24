@@ -1069,7 +1069,7 @@ export default function App() {
           executeAt: new Date(confirmedDateTime).getTime(), status: 'cloud_scheduled',
           sellerId: sellerId || '', parentSellerId: prod.parentSellerId || '',
           currentStatus: prod.status || '', currentIsDisplayed: prod.isDisplayed,
-          logs: ['✅ QStash 대기열에 예약이 성공적으로 등록되었습니다.']
+          logs: ['✅ 대기열에 예약이 성공적으로 등록되었습니다.']
         });
       }));
       setTasks(prev => [...newTasks, ...prev]);
