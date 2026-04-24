@@ -1,3 +1,4 @@
+import { Client } from "@upstash/qstash";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 
@@ -11,7 +12,7 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    // ⭐️ [수정됨] .trim()을 추가하여 복사/붙여넣기 시 들어간 공백을 제거합니다.
+    // 공백 제거 및 환경 변수 로드
     const qstashToken = process.env.QSTASH_TOKEN?.trim();
     const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
     const awsSecretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
@@ -19,6 +20,9 @@ export default async function handler(req, res) {
 
     if (!qstashToken) throw new Error("환경 변수에 QSTASH_TOKEN이 누락되었습니다.");
     if (!awsAccessKeyId) throw new Error("환경 변수에 AWS_ACCESS_KEY_ID가 누락되었습니다.");
+
+    // ⭐️ US 리전 키를 가지고 계시므로, 아무런 주소 설정 없이 공식 SDK를 기본값으로 깔끔하게 초기화합니다!
+    const qstash = new Client({ token: qstashToken });
 
     // AWS DynamoDB 클라이언트 초기화
     const dbClient = new DynamoDBClient({ 
@@ -73,13 +77,8 @@ export default async function handler(req, res) {
     // 3️⃣ DELETE
     if (action === 'DELETE') {
       if (messageId) {
-        try {
-          // ⭐️ SDK 대신 순수 fetch로 삭제 통신
-          await fetch(`https://qstash.upstash.io/v2/messages/${messageId}`, {
-            method: "DELETE",
-            headers: { "Authorization": `Bearer ${qstashToken}` }
-          });
-        } catch(e) { console.error("QStash 삭제 실패:", e); }
+        // 공식 SDK 메서드 사용
+        try { await qstash.messages.delete(messageId); } catch(e) { console.error("QStash 삭제 실패:", e); }
       }
       if (executeAt) {
          await docClient.send(new DeleteCommand({ TableName: LOG_TABLE_NAME, Key: { communityId, executedAt: Number(executeAt) } }));
@@ -90,12 +89,7 @@ export default async function handler(req, res) {
     // 4️⃣ CREATE / UPDATE
     if (action === 'CREATE' || action === 'UPDATE') {
       if (action === 'UPDATE' && messageId && oldExecuteAt) {
-        try {
-          await fetch(`https://qstash.upstash.io/v2/messages/${messageId}`, {
-            method: "DELETE",
-            headers: { "Authorization": `Bearer ${qstashToken}` }
-          });
-        } catch(e) {}
+        try { await qstash.messages.delete(messageId); } catch(e) {}
         try { await docClient.send(new DeleteCommand({ TableName: LOG_TABLE_NAME, Key: { communityId, executedAt: Number(oldExecuteAt) } })); } catch(e) {}
       }
 
@@ -104,27 +98,18 @@ export default async function handler(req, res) {
       const host = req.headers['x-forwarded-host'] || req.headers.host;
       const workerUrl = `${protocol}://${host}/api/qstash-worker`; 
 
-      // ⭐️ 핵심 해결: SDK 버그를 피해 순수 fetch로 QStash에 스케줄을 직접 예약합니다.
-      const qstashRes = await fetch(`https://qstash.upstash.io/v2/publish/${workerUrl}`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${qstashToken}`,
-          "Content-Type": "application/json",
-          // 1초 단위 예약 시간을 설정 (Unix Timestamp 초 단위)
-          "Upstash-Not-Before": Math.floor(targetTimeMs / 1000).toString()
-        },
-        body: JSON.stringify({ taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt: targetTimeMs })
-      });
-
-      // QStash 통신 실패 시 원인을 정확하게 프론트로 전달합니다.
-      if (!qstashRes.ok) {
-        const errText = await qstashRes.text();
-        throw new Error(`QStash 서버 거부 (${qstashRes.status}): ${errText}`);
+      let qstashResponse;
+      try {
+        // ⭐️ 공식 SDK를 사용하여 초 단위로 정확히 예약
+        qstashResponse = await qstash.publishJSON({
+          url: workerUrl,
+          body: { taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt: targetTimeMs },
+          notBefore: Math.floor(targetTimeMs / 1000), 
+        });
+      } catch (qstashErr) {
+        throw new Error(`QStash 서버 거부: ${qstashErr.message}`);
       }
-      
-      const qstashResponse = await qstashRes.json();
 
-      // 성공했다면 DynamoDB에 대기열(PENDING) 기록
       try {
         await docClient.send(new PutCommand({
           TableName: LOG_TABLE_NAME,
@@ -141,12 +126,8 @@ export default async function handler(req, res) {
           }
         }));
       } catch (dbErr) {
-        // DB 저장 실패 시 이미 등록된 QStash 알람도 안전하게 롤백(취소)
         if (qstashResponse?.messageId) {
-            await fetch(`https://qstash.upstash.io/v2/messages/${qstashResponse.messageId}`, {
-              method: "DELETE",
-              headers: { "Authorization": `Bearer ${qstashToken}` }
-            }).catch(()=>{});
+            await qstash.messages.delete(qstashResponse.messageId).catch(()=>{});
         }
         throw new Error(`DynamoDB 기록 실패: ${dbErr.message}`);
       }
@@ -157,7 +138,6 @@ export default async function handler(req, res) {
     return res.status(400).json({ message: "유효하지 않은 Action입니다." });
   } catch (error) {
     console.error("Schedule API Fatal Error:", error);
-    // 화면 우측 상단 토스트 알림으로 에러 원인을 그대로 보여줌
     return res.status(500).json({ message: "서버 처리 실패", error: error.message });
   }
 }
