@@ -10,7 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "latest",
+    "@aws-sdk/lib-dynamodb": "latest",
     "@tailwindcss/vite": "^4.2.1",
+    "@upstash/qstash": "latest",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tailwindcss": "^4.2.1"
