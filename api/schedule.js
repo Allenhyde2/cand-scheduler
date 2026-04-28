@@ -5,139 +5,113 @@ import { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand } from 
 const LOG_TABLE_NAME = "VakeSchedulerLogs";
 
 export default async function handler(req, res) {
-  // CORS 허용 처리
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-can-community-id, x-can-profile-id');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-can-community-id, x-can-profile-id');
+    if (req.method === 'OPTIONS') return res.status(200).end();
 
-  try {
-    // 공백 제거 및 환경 변수 로드
-    const qstashToken = process.env.QSTASH_TOKEN?.trim();
-    const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
-    const awsSecretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
-    const awsRegion = process.env.AWS_REGION?.trim() || "ap-southeast-2";
+    try {
+        const qstashToken = process.env.QSTASH_TOKEN?.trim();
+        const awsAccessKeyId = process.env.AWS_ACCESS_KEY_ID?.trim();
+        const awsSecretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
+        const awsRegion = process.env.AWS_REGION?.trim() || "ap-northeast-2";
 
-    if (!qstashToken) throw new Error("환경 변수에 QSTASH_TOKEN이 누락되었습니다.");
-    if (!awsAccessKeyId) throw new Error("환경 변수에 AWS_ACCESS_KEY_ID가 누락되었습니다.");
+        const qstash = new Client({ token: qstashToken, baseUrl: "https://qstash.us-east-1.upstash.io" });
+        const dbClient = new DynamoDBClient({ region: awsRegion, credentials: { accessKeyId: awsAccessKeyId, secretAccessKey: awsSecretKey } });
+        const docClient = DynamoDBDocumentClient.from(dbClient);
 
-    // ⭐️ US 리전 키를 가지고 계시므로, 아무런 주소 설정 없이 공식 SDK를 기본값으로 깔끔하게 초기화합니다!
-    const qstash = new Client({ token: qstashToken });
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const { action, taskId, productId, productName, newStatus, newIsDisplayed, executeAt, oldExecuteAt, messageId, token, communityId, currentStatus, currentIsDisplayed } = body;
 
-    // AWS DynamoDB 클라이언트 초기화
-    const dbClient = new DynamoDBClient({ 
-      region: awsRegion,
-      credentials: {
-        accessKeyId: awsAccessKeyId,
-        secretAccessKey: awsSecretKey
-      }
-    });
-    const docClient = DynamoDBDocumentClient.from(dbClient);
-
-    const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { action, taskId, productId, productName, newStatus, newIsDisplayed, executeAt, oldExecuteAt, messageId, token, communityId } = body;
-
-    // 1️⃣ HISTORY
-    if (action === 'HISTORY') {
-      const command = new QueryCommand({
-        TableName: LOG_TABLE_NAME,
-        KeyConditionExpression: "communityId = :cid",
-        ExpressionAttributeValues: { ":cid": communityId },
-        ScanIndexForward: false, 
-        Limit: 100
-      });
-      const response = await docClient.send(command);
-      const logs = response.Items.filter(item => item.status !== 'PENDING');
-      return res.status(200).json({ success: true, logs });
-    }
-
-    // 2️⃣ LIST
-    if (action === 'LIST') {
-      const command = new QueryCommand({
-        TableName: LOG_TABLE_NAME,
-        KeyConditionExpression: "communityId = :cid",
-        ExpressionAttributeValues: { ":cid": communityId },
-        ScanIndexForward: false
-      });
-      const response = await docClient.send(command);
-      const tasks = response.Items.filter(item => item.status === 'PENDING').map(item => ({
-        id: item.taskId,
-        messageId: item.messageId, 
-        productId: item.productId,
-        productName: item.productName,
-        newStatus: item.newStatus,
-        newIsDisplayed: item.newIsDisplayed,
-        executeAt: item.executedAt,
-        status: 'cloud_scheduled',
-        logs: [`☁️ [QStash 무지연 대기중] ${new Date(item.executedAt).toLocaleString()} 실행 예약`]
-      }));
-      return res.status(200).json({ tasks });
-    }
-
-    // 3️⃣ DELETE
-    if (action === 'DELETE') {
-      if (messageId) {
-        // 공식 SDK 메서드 사용
-        try { await qstash.messages.delete(messageId); } catch(e) { console.error("QStash 삭제 실패:", e); }
-      }
-      if (executeAt) {
-         await docClient.send(new DeleteCommand({ TableName: LOG_TABLE_NAME, Key: { communityId, executedAt: Number(executeAt) } }));
-      }
-      return res.status(200).json({ message: "예약이 삭제되었습니다." });
-    }
-
-    // 4️⃣ CREATE / UPDATE
-    if (action === 'CREATE' || action === 'UPDATE') {
-      if (action === 'UPDATE' && messageId && oldExecuteAt) {
-        try { await qstash.messages.delete(messageId); } catch(e) {}
-        try { await docClient.send(new DeleteCommand({ TableName: LOG_TABLE_NAME, Key: { communityId, executedAt: Number(oldExecuteAt) } })); } catch(e) {}
-      }
-
-      const targetTimeMs = new Date(executeAt).getTime();
-      const protocol = req.headers['x-forwarded-proto'] || 'https';
-      const host = req.headers['x-forwarded-host'] || req.headers.host;
-      const workerUrl = `${protocol}://${host}/api/qstash-worker`; 
-
-      let qstashResponse;
-      try {
-        // ⭐️ 공식 SDK를 사용하여 초 단위로 정확히 예약
-        qstashResponse = await qstash.publishJSON({
-          url: workerUrl,
-          body: { taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt: targetTimeMs },
-          notBefore: Math.floor(targetTimeMs / 1000), 
-        });
-      } catch (qstashErr) {
-        throw new Error(`QStash 서버 거부: ${qstashErr.message}`);
-      }
-
-      try {
-        await docClient.send(new PutCommand({
-          TableName: LOG_TABLE_NAME,
-          Item: {
-            communityId: communityId,
-            executedAt: targetTimeMs,
-            taskId: taskId,
-            messageId: qstashResponse.messageId, 
-            productId: productId,
-            productName: productName || '이름 없음',
-            newStatus: newStatus,
-            newIsDisplayed: newIsDisplayed,
-            status: 'PENDING'
-          }
-        }));
-      } catch (dbErr) {
-        if (qstashResponse?.messageId) {
-            await qstash.messages.delete(qstashResponse.messageId).catch(()=>{});
+        // 1️⃣ HISTORY
+        if (action === 'HISTORY') {
+            const command = new QueryCommand({
+                TableName: LOG_TABLE_NAME,
+                KeyConditionExpression: "communityId = :cid",
+                ExpressionAttributeValues: { ":cid": communityId },
+                ScanIndexForward: false,
+                Limit: 100
+            });
+            const response = await docClient.send(command);
+            const logs = response.Items.filter(item => item.status !== 'PENDING');
+            return res.status(200).json({ success: true, logs });
         }
-        throw new Error(`DynamoDB 기록 실패: ${dbErr.message}`);
-      }
 
-      return res.status(200).json({ message: "예약 완료", taskId, messageId: qstashResponse.messageId });
+        // 2️⃣ LIST
+        if (action === 'LIST') {
+            const command = new QueryCommand({
+                TableName: LOG_TABLE_NAME,
+                KeyConditionExpression: "communityId = :cid",
+                ExpressionAttributeValues: { ":cid": communityId },
+                ScanIndexForward: false
+            });
+            const response = await docClient.send(command);
+            const tasks = response.Items.filter(item => item.status === 'PENDING').map(item => ({
+                id: item.taskId,
+                messageId: item.messageId,
+                productId: item.productId,
+                productName: item.productName,
+                newStatus: item.newStatus,
+                newIsDisplayed: item.newIsDisplayed,
+                currentStatus: item.currentStatus,
+                currentIsDisplayed: item.currentIsDisplayed,
+                executeAt: item.executedAt,
+                status: 'cloud_scheduled',
+                logs: [`☁️ [QStash 대기중] ${new Date(item.executedAt).toLocaleString()} 실행 예정`]
+            }));
+            return res.status(200).json({ tasks });
+        }
+
+        // 3️⃣ DELETE
+        if (action === 'DELETE') {
+            if (messageId) try { await qstash.messages.delete(messageId); } catch (e) { }
+            if (executeAt) await docClient.send(new DeleteCommand({ TableName: LOG_TABLE_NAME, Key: { communityId, executedAt: Number(executeAt) } }));
+            return res.status(200).json({ message: "예약이 취소되었습니다." });
+        }
+
+        // 4️⃣ CREATE / UPDATE
+        if (action === 'CREATE' || action === 'UPDATE') {
+            if (action === 'UPDATE' && messageId && oldExecuteAt) {
+                try { await qstash.messages.delete(messageId); } catch (e) { }
+                try { await docClient.send(new DeleteCommand({ TableName: LOG_TABLE_NAME, Key: { communityId, executedAt: Number(oldExecuteAt) } })); } catch (e) { }
+            }
+
+            const targetTimeMs = new Date(executeAt).getTime();
+
+            // ⭐️ [해결] 밀리초 시간에 소수점 난수를 더해 무조건 고유한 숫자로 만듭니다. (예: 173839... .1234)
+            const uniqueExecuteAt = targetTimeMs + Math.random();
+
+            const protocol = req.headers['x-forwarded-proto'] || 'https';
+            const host = req.headers['x-forwarded-host'] || req.headers.host;
+            const workerUrl = `${protocol}://${host}/api/qstash-worker`;
+
+            const qstashResponse = await qstash.publishJSON({
+                url: workerUrl,
+                body: { taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt: uniqueExecuteAt, currentStatus, currentIsDisplayed },
+                notBefore: Math.floor(targetTimeMs / 1000),
+            });
+
+            await docClient.send(new PutCommand({
+                TableName: LOG_TABLE_NAME,
+                Item: {
+                    communityId,
+                    executedAt: uniqueExecuteAt, // ⭐️ 완전한 고유 숫자(Number)로 저장됩니다!
+                    taskId,
+                    messageId: qstashResponse.messageId,
+                    productId,
+                    productName: productName || '이름 없음',
+                    newStatus,
+                    newIsDisplayed: newIsDisplayed === true,
+                    currentStatus,
+                    currentIsDisplayed,
+                    status: 'PENDING'
+                }
+            }));
+
+            return res.status(200).json({ message: "예약 완료", taskId, messageId: qstashResponse.messageId });
+        }
+        return res.status(400).json({ error: "유효하지 않은 Action입니다." });
+    } catch (error) {
+        return res.status(500).json({ message: "서버 처리 실패", error: error.message });
     }
-
-    return res.status(400).json({ message: "유효하지 않은 Action입니다." });
-  } catch (error) {
-    console.error("Schedule API Fatal Error:", error);
-    return res.status(500).json({ message: "서버 처리 실패", error: error.message });
-  }
 }
