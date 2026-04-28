@@ -52,7 +52,7 @@ export default async function handler(req, res) {
         // 상세 텍스트 조합
         const oldDesc = currentStatus ? `${translate(currentStatus)} (${currentIsDisplayed ? '진열' : '숨김'})` : '상태';
         const newDesc = `${translate(newStatus)} (${newIsDisplayed ? '진열' : '숨김'})`;
-        resultMessage = `[성공] ${oldDesc} → ${newDesc}로 변경 완료 (무지연 처리)`;
+        resultMessage = `상태 변경이 정상적으로 완료되었습니다.`;
 
     } catch (error) {
         isSuccess = false;
