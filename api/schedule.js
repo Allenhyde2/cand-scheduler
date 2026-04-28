@@ -16,7 +16,7 @@ export default async function handler(req, res) {
         const awsSecretKey = process.env.AWS_SECRET_ACCESS_KEY?.trim();
         const awsRegion = process.env.AWS_REGION?.trim() || "ap-northeast-2";
 
-        const qstash = new Client({ token: qstashToken, baseUrl: "https://qstash.us-east-1.upstash.io" });
+        const qstash = new Client({ token: qstashToken, baseUrl: "https://qstash-eu-central-1.upstash.io" });
         const dbClient = new DynamoDBClient({ region: awsRegion, credentials: { accessKeyId: awsAccessKeyId, secretAccessKey: awsSecretKey } });
         const docClient = DynamoDBDocumentClient.from(dbClient);
 
