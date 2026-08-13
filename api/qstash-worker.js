@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt, currentStatus, currentIsDisplayed } = body;
+    const { taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt, currentStatus, currentIsDisplayed, sellerId } = body;
 
     const dbClient = new DynamoDBClient({
         region: process.env.AWS_REGION?.trim() || "ap-northeast-2",
@@ -32,13 +32,21 @@ export default async function handler(req, res) {
         const apiUrl = `https://api.cand.xyz/products/${encodeURIComponent(productId)}`;
         const partialUpdatePayload = { status: newStatus, isDisplayed: newIsDisplayed };
 
+        // ⭐️ [수정 2] 캔패스 서버가 요구하는 권한 헤더 구성
+        const headers = {
+            'content-type': 'application/json',
+            'authorization': `Bearer ${token}`,
+            'x-can-community-id': communityId,
+        };
+        
+        // 상품 수정을 위한 필수 프로필(셀러) ID 헤더 추가 (이게 없어서 400 거절이 발생했습니다)
+        if (sellerId) {
+            headers['x-can-profile-id'] = sellerId;
+        }
+        
         const response = await fetch(apiUrl, {
             method: 'PUT',
-            headers: {
-                'content-type': 'application/json',
-                'authorization': `Bearer ${token}`,
-                'x-can-community-id': communityId,
-            },
+            headers: headers,
             body: JSON.stringify(partialUpdatePayload)
         });
 
@@ -73,7 +81,8 @@ export default async function handler(req, res) {
                 success: isSuccess,
                 message: resultMessage,
                 status: isSuccess ? 'SUCCESS' : 'FAILED',
-                delayMs: delayMs
+                delayMs: delayMs,
+                sellerId: sellerId || ''
             }
         }));
     } catch (dbError) {
