@@ -1053,7 +1053,7 @@ export default function App() {
             action: 'CREATE', taskId: newTaskId, productId: prod.id, productName: prod.name,
             newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
             executeAt: new Date(confirmedDateTime).toISOString(), token, communityId,
-            sellerId: sellerId || '',
+            sellerId: prod.sellerId || sellerId || '',
             parentSellerId: prod.parentSellerId || '',
             currentStatus: prod.status || '', currentIsDisplayed: prod.isDisplayed
           })
