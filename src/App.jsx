@@ -410,6 +410,63 @@ export default function App() {
     'x-can-community-id': communityId,
   });
 
+  const refreshAccessToken = async () => {
+    const refreshToken = localStorage.getItem('cand_refresh_token');
+    if (!refreshToken) throw new Error('refresh_token 없음');
+
+    const res = await fetch(`${BACKEND_API_URL}/api/token`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'refresh_token',
+        client_id: CLIENT_ID,
+        refresh_token: refreshToken,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error_description || data.error || '토큰 갱신 실패');
+
+    const newToken = data.access_token;
+    const newRefreshToken = data.refresh_token || refreshToken;
+    const expiresIn = data.expires_in || 2591999;
+    const expiresAt = Date.now() + (expiresIn * 1000);
+
+    setToken(newToken);
+    localStorage.setItem('cand_token', newToken);
+    localStorage.setItem('cand_refresh_token', newRefreshToken);
+    localStorage.setItem('cand_token_expires_at', String(expiresAt));
+
+    return newToken;
+  };
+
+  const getValidToken = async () => {
+    const expiresAt = Number(localStorage.getItem('cand_token_expires_at') || '0');
+    if (expiresAt && Date.now() > expiresAt - 300000) {
+      return await refreshAccessToken();
+    }
+    return token;
+  };
+
+  const fetchWithAuth = async (url, options = {}) => {
+    const validToken = await getValidToken();
+    const headers = { ...getAuthHeaders(validToken), ...options.headers };
+    let res = await fetch(url, { ...options, headers });
+
+    if (res.status === 401) {
+      try {
+        const newToken = await refreshAccessToken();
+        const retryHeaders = { ...getAuthHeaders(newToken), ...options.headers };
+        res = await fetch(url, { ...options, headers: retryHeaders });
+      } catch {
+        handleLogout();
+        throw new Error('인증이 만료되었습니다. 다시 로그인해주세요.');
+      }
+    }
+
+    return res;
+  };
+
   const fetchHistoryLogs = async (currentToken) => {
     setIsLoadingHistory(true);
     try {
@@ -578,6 +635,9 @@ export default function App() {
           localStorage.setItem('cand_token_full_response', JSON.stringify(data));
 
           const accessToken = data.access_token;
+          const refreshToken = data.refresh_token || '';
+          const expiresIn = data.expires_in || 2591999;
+          const expiresAt = Date.now() + (expiresIn * 1000);
           let finalSellerId = '';
           if (savedLoginMode === 'admin') {
             finalSellerId = savedAdminTargetId || '';
@@ -606,6 +666,8 @@ export default function App() {
           setLoginMode(savedLoginMode);
           setIsAuthenticated(true);
           localStorage.setItem('cand_token', accessToken);
+          localStorage.setItem('cand_refresh_token', refreshToken);
+          localStorage.setItem('cand_token_expires_at', String(expiresAt));
           localStorage.setItem('cand_seller_id', finalSellerId);
           localStorage.setItem('cand_login_mode', savedLoginMode);
 
@@ -629,14 +691,38 @@ export default function App() {
         const savedRecentProducts = localStorage.getItem('cand_recent_products');
 
         if (savedToken) {
-          setToken(savedToken);
+          let activeToken = savedToken;
+          const expiresAt = Number(localStorage.getItem('cand_token_expires_at') || '0');
+          const savedRefreshToken = localStorage.getItem('cand_refresh_token');
+
+          if (expiresAt && Date.now() > expiresAt - 300000 && savedRefreshToken) {
+            try {
+              const res = await fetch(`${BACKEND_API_URL}/api/token`, {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ grant_type: 'refresh_token', client_id: CLIENT_ID, refresh_token: savedRefreshToken }),
+              });
+              const data = await res.json();
+              if (res.ok && data.access_token) {
+                activeToken = data.access_token;
+                const newExpiresAt = Date.now() + ((data.expires_in || 2591999) * 1000);
+                localStorage.setItem('cand_token', activeToken);
+                localStorage.setItem('cand_refresh_token', data.refresh_token || savedRefreshToken);
+                localStorage.setItem('cand_token_expires_at', String(newExpiresAt));
+              }
+            } catch (e) {
+              console.error('자동 로그인 토큰 갱신 실패:', e);
+            }
+          }
+
+          setToken(activeToken);
           setSellerId(savedSellerId || '');
           setLoginMode(savedMode);
           setIsAuthenticated(true);
           try { setSellerProfiles(JSON.parse(localStorage.getItem('cand_seller_profiles') || '[]')); } catch (e) { }
-          fetchProductsWithArgs(savedToken, savedSellerId, savedMode, false);
-          fetchScheduledTasks(savedToken);
-          fetchHistoryLogs(savedToken);
+          fetchProductsWithArgs(activeToken, savedSellerId, savedMode, false);
+          fetchScheduledTasks(activeToken);
+          fetchHistoryLogs(activeToken);
         }
         if (savedRecentProducts) {
           try { setRecentProducts(JSON.parse(savedRecentProducts)); } catch (e) { }
@@ -671,6 +757,8 @@ export default function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('cand_token');
+    localStorage.removeItem('cand_refresh_token');
+    localStorage.removeItem('cand_token_expires_at');
     localStorage.removeItem('cand_seller_id');
     localStorage.removeItem('cand_login_mode');
     localStorage.removeItem('cand_seller_profiles');
@@ -824,7 +912,7 @@ export default function App() {
       sellerNamesFetchedRef.current.add(sid);
       try {
         const url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`sellers/${sid}`)}`;
-        const res = await fetch(url, { method: 'GET', headers: getAuthHeaders(token) });
+        const res = await fetchWithAuth(url, { method: 'GET' });
         if (res.ok) {
           const data = await res.json();
           const name = data?.name || data?.nickname || data?.userId || sid;
@@ -930,14 +1018,15 @@ export default function App() {
     try {
       showToast('상품 정보를 갱신 중입니다...', 'info');
 
-      const requestHeaders = getAuthHeaders(token);
+      const validToken = await getValidToken();
+      const requestHeaders = getAuthHeaders(validToken);
       if (sellerId) {
         requestHeaders['x-can-profile-id'] = sellerId;
       }
 
       const url = `${BACKEND_API_URL}/api/proxy?endpoint=${encodeURIComponent(`products/${id}`)}`;
 
-      const res = await fetch(url, {
+      const res = await fetchWithAuth(url, {
         method: 'PUT',
         headers: requestHeaders,
         body: JSON.stringify(payload)
@@ -977,7 +1066,7 @@ export default function App() {
     if (scheduleForm.products.find(p => p.id === id)) return showToast('이미 추가된 상품입니다.', 'error');
     setIsManualLoading(true);
     try {
-      const res = await fetch(`${BACKEND_API_URL}/api/proxy?endpoint=products/${encodeURIComponent(id)}`, { headers: getAuthHeaders(token) });
+      const res = await fetchWithAuth(`${BACKEND_API_URL}/api/proxy?endpoint=products/${encodeURIComponent(id)}`);
       if (!res.ok) throw new Error();
       const product = await res.json();
       // 셀러 모드: 본인 sellerProfile에 속하는 상품만 추가 허용
@@ -1043,16 +1132,18 @@ export default function App() {
     setIsConfirmModalOpen(false);
     showToast('예약 전송 중...', 'info');
     try {
+      const validToken = await getValidToken();
+      const currentRefreshToken = localStorage.getItem('cand_refresh_token') || '';
       const newTasks = [];
       await Promise.all(scheduleForm.products.map(async (prod) => {
         const newTaskId = Math.random().toString(36).substr(2, 9);
         const res = await fetch(SCHEDULER_API_URL, {
           method: 'POST',
-          headers: getAuthHeaders(token),
+          headers: getAuthHeaders(validToken),
           body: JSON.stringify({
             action: 'CREATE', taskId: newTaskId, productId: prod.id, productName: prod.name,
             newStatus: scheduleForm.status, newIsDisplayed: scheduleForm.isDisplayed === 'true',
-            executeAt: new Date(confirmedDateTime).toISOString(), token, communityId,
+            executeAt: new Date(confirmedDateTime).toISOString(), token: validToken, refreshToken: currentRefreshToken, communityId,
             sellerId: prod.sellerId || sellerId || '',
             parentSellerId: prod.parentSellerId || '',
             currentStatus: prod.status || '', currentIsDisplayed: prod.isDisplayed
@@ -1109,9 +1200,11 @@ export default function App() {
     const executeTimeIso = new Date(`${editModal.date}T${editModal.time}`).toISOString();
     try {
       showToast('수정 중...', 'info');
+      const validToken = await getValidToken();
+      const currentRefreshToken = localStorage.getItem('cand_refresh_token') || '';
       const response = await fetch(SCHEDULER_API_URL, {
-        method: 'POST', headers: getAuthHeaders(token),
-        body: JSON.stringify({ action: 'UPDATE', taskId: editModal.task.id, messageId: editModal.task.messageId, oldExecuteAt: editModal.task.executeAt, productId: editModal.task.productId, productName: editModal.task.productName, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: executeTimeIso, token, communityId, sellerId: editModal.task.sellerId || sellerId || '', parentSellerId: editModal.task.parentSellerId || '' })
+        method: 'POST', headers: getAuthHeaders(validToken),
+        body: JSON.stringify({ action: 'UPDATE', taskId: editModal.task.id, messageId: editModal.task.messageId, oldExecuteAt: editModal.task.executeAt, productId: editModal.task.productId, productName: editModal.task.productName, newStatus: editModal.status, newIsDisplayed: editModal.isDisplayed === 'true', executeAt: executeTimeIso, token: validToken, refreshToken: currentRefreshToken, communityId, sellerId: editModal.task.sellerId || sellerId || '', parentSellerId: editModal.task.parentSellerId || '' })
       });
       if (!response.ok) throw new Error();
       const resData = await response.json();

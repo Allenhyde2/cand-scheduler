@@ -21,7 +21,7 @@ export default async function handler(req, res) {
         const docClient = DynamoDBDocumentClient.from(dbClient);
 
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        const { action, taskId, productId, productName, newStatus, newIsDisplayed, executeAt, oldExecuteAt, messageId, token, communityId, currentStatus, currentIsDisplayed, sellerId } = body;
+        const { action, taskId, productId, productName, newStatus, newIsDisplayed, executeAt, oldExecuteAt, messageId, token, refreshToken, communityId, currentStatus, currentIsDisplayed, sellerId } = body;
 
         // 1️⃣ HISTORY
         if (action === 'HISTORY') {
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
 
             const qstashResponse = await qstash.publishJSON({
                 url: workerUrl,
-                body: { taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt: uniqueExecuteAt, currentStatus, currentIsDisplayed, sellerId: sellerId || '' },
+                body: { taskId, productId, productName, newStatus, newIsDisplayed, token, refreshToken: refreshToken || '', communityId, exactExecuteAt: uniqueExecuteAt, currentStatus, currentIsDisplayed, sellerId: sellerId || '' },
                 notBefore: Math.floor(targetTimeMs / 1000),
             });
 
@@ -106,6 +106,7 @@ export default async function handler(req, res) {
                     currentStatus,
                     currentIsDisplayed,
                     sellerId: sellerId || '',
+                    refreshToken: refreshToken || '',
                     status: 'PENDING'
                 }
             }));

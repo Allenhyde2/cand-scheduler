@@ -20,7 +20,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { code, code_verifier, redirect_uri, client_id } = req.body;
+    const { grant_type, code, code_verifier, redirect_uri, client_id, refresh_token } = req.body;
     const CLIENT_SECRET = process.env.CAND_CLIENT_SECRET;
 
     if (!CLIENT_SECRET) {
@@ -28,22 +28,29 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: '서버 설정 오류: 시크릿 키가 설정되지 않았습니다.' });
     }
 
-    if (!code || !client_id || !redirect_uri) {
-      return res.status(400).json({ error: '필수 파라미터(code, client_id, redirect_uri)가 누락되었습니다.' });
-    }
-
     const params = new URLSearchParams();
-    params.append('grant_type', 'authorization_code');
     params.append('client_id', client_id);
     params.append('client_secret', CLIENT_SECRET);
-    params.append('code', code);
-    params.append('redirect_uri', redirect_uri);
-    
-    if (code_verifier) {
-      params.append('code_verifier', code_verifier);
+
+    if (grant_type === 'refresh_token') {
+      if (!refresh_token || !client_id) {
+        return res.status(400).json({ error: '필수 파라미터(client_id, refresh_token)가 누락되었습니다.' });
+      }
+      params.append('grant_type', 'refresh_token');
+      params.append('refresh_token', refresh_token);
+    } else {
+      if (!code || !client_id || !redirect_uri) {
+        return res.status(400).json({ error: '필수 파라미터(code, client_id, redirect_uri)가 누락되었습니다.' });
+      }
+      params.append('grant_type', 'authorization_code');
+      params.append('code', code);
+      params.append('redirect_uri', redirect_uri);
+      if (code_verifier) {
+        params.append('code_verifier', code_verifier);
+      }
     }
 
-    console.log('캔패스 서버로 토큰 요청 전송 중...');
+    console.log(`캔패스 서버로 토큰 요청 전송 중... (grant_type: ${grant_type || 'authorization_code'})`);
 
     const response = await fetch('https://canpass.me/oauth2/token', {
       method: 'POST',

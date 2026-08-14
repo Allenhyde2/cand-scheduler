@@ -2,15 +2,45 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
 const LOG_TABLE_NAME = "VakeSchedulerLogs";
+const CLIENT_ID = '4582f19ca0325304d27abbd18a36b21b';
 
 // 프론트엔드 출력을 위한 상태값 한국어 변환기
 const translate = (s) => ({ onSale: '판매중', soldOut: '품절', scheduled: '판매예정', completed: '판매종료' }[s] || s);
+
+async function refreshToken(refreshTokenValue) {
+    const CLIENT_SECRET = process.env.CAND_CLIENT_SECRET?.trim();
+    if (!refreshTokenValue || !CLIENT_SECRET) return null;
+
+    try {
+        const params = new URLSearchParams();
+        params.append('grant_type', 'refresh_token');
+        params.append('client_id', CLIENT_ID);
+        params.append('client_secret', CLIENT_SECRET);
+        params.append('refresh_token', refreshTokenValue);
+
+        const res = await fetch('https://canpass.me/oauth2/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString(),
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            return data.access_token || null;
+        }
+        console.error('토큰 갱신 응답 에러:', res.status);
+        return null;
+    } catch (e) {
+        console.error('토큰 갱신 실패:', e.message);
+        return null;
+    }
+}
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-    const { taskId, productId, productName, newStatus, newIsDisplayed, token, communityId, exactExecuteAt, currentStatus, currentIsDisplayed, sellerId } = body;
+    const { taskId, productId, productName, newStatus, newIsDisplayed, token, refreshToken: refreshTokenValue, communityId, exactExecuteAt, currentStatus, currentIsDisplayed, sellerId } = body;
 
     const dbClient = new DynamoDBClient({
         region: process.env.AWS_REGION?.trim() || "ap-northeast-2",
@@ -29,21 +59,31 @@ export default async function handler(req, res) {
     const delayMs = exactExecuteAt ? Math.max(0, startTime - Math.floor(exactExecuteAt)) : 0;
 
     try {
+        // ⭐️ 토큰 갱신 시도 — 예약 생성 시점 이후 만료되었을 수 있으므로 먼저 갱신합니다
+        let activeToken = token;
+        if (refreshTokenValue) {
+            const newToken = await refreshToken(refreshTokenValue);
+            if (newToken) {
+                activeToken = newToken;
+                console.log('토큰 갱신 성공 — 새 access_token으로 API 호출합니다.');
+            } else {
+                console.log('토큰 갱신 실패 — 기존 토큰으로 시도합니다.');
+            }
+        }
+
         const apiUrl = `https://api.cand.xyz/products/${encodeURIComponent(productId)}`;
         const partialUpdatePayload = { status: newStatus, isDisplayed: newIsDisplayed };
 
-        // ⭐️ [수정 2] 캔패스 서버가 요구하는 권한 헤더 구성
         const headers = {
             'content-type': 'application/json',
-            'authorization': `Bearer ${token}`,
+            'authorization': `Bearer ${activeToken}`,
             'x-can-community-id': communityId,
         };
-        
-        // 상품 수정을 위한 필수 프로필(셀러) ID 헤더 추가 (이게 없어서 400 거절이 발생했습니다)
+
         if (sellerId) {
             headers['x-can-profile-id'] = sellerId;
         }
-        
+
         const response = await fetch(apiUrl, {
             method: 'PUT',
             headers: headers,
