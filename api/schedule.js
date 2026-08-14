@@ -1,14 +1,12 @@
 import { Client } from "@upstash/qstash";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand, QueryCommand, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { setCors } from './_cors.js';
 
 const LOG_TABLE_NAME = "VakeSchedulerLogs";
 
 export default async function handler(req, res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-can-community-id, x-can-profile-id');
-    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (setCors(req, res)) return;
 
     try {
         const qstashToken = process.env.QSTASH_TOKEN?.trim();

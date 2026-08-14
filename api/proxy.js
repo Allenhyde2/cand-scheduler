@@ -1,15 +1,8 @@
 // Vercel Serverless Function: CORS 에러를 우회하기 위한 프록시 서버입니다.
+import { setCors } from './_cors.js';
 
 export default async function handler(req, res) {
-  // ⭐️ CORS 허용 설정 (403 및 Preflight 에러 완벽 방지)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-can-community-id, x-can-profile-id');
-
-  // OPTIONS preflight 요청 시 즉시 200 반환
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (setCors(req, res)) return;
 
   const { endpoint, baseUrl, ...queryParams } = req.query;
 

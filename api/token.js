@@ -1,19 +1,9 @@
 // api/token.js
 // Vercel Serverless Function: 캔패스 토큰 발급 프록시
+import { setCors } from './_cors.js';
 
 export default async function handler(req, res) {
-  // CORS 처리 (만약을 대비해 추가)
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (setCors(req, res)) return;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method Not Allowed. POST 요청만 허용됩니다.' });
