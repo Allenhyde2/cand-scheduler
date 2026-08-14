@@ -628,12 +628,6 @@ export default function App() {
           const data = await res.json();
           if (!res.ok) throw new Error(data.error_description || data.error || '토큰 발급 실패');
 
-          // ⭐️ [디버그] CANpass 토큰 응답 전체 확인 — 커뮤니티 토큰이 별도로 있는지 체크
-          console.log('=== CANpass 토큰 응답 전체 ===');
-          console.log(JSON.stringify(data, null, 2));
-          console.log('응답 키 목록:', Object.keys(data));
-          localStorage.setItem('cand_token_full_response', JSON.stringify(data));
-
           const accessToken = data.access_token;
           const refreshToken = data.refresh_token || '';
           const expiresIn = data.expires_in || 2591999;
@@ -759,6 +753,7 @@ export default function App() {
     localStorage.removeItem('cand_token');
     localStorage.removeItem('cand_refresh_token');
     localStorage.removeItem('cand_token_expires_at');
+    localStorage.removeItem('cand_token_full_response');
     localStorage.removeItem('cand_seller_id');
     localStorage.removeItem('cand_login_mode');
     localStorage.removeItem('cand_seller_profiles');

@@ -1,3 +1,4 @@
+import { Receiver } from "@upstash/qstash";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
@@ -38,6 +39,23 @@ async function refreshToken(refreshTokenValue) {
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') return res.status(405).end();
+
+    const signingKeys = {
+        currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY?.trim(),
+        nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY?.trim(),
+    };
+
+    if (signingKeys.currentSigningKey && signingKeys.nextSigningKey) {
+        const receiver = new Receiver(signingKeys);
+        const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+        const signature = req.headers['upstash-signature'];
+        try {
+            await receiver.verify({ signature, body: rawBody });
+        } catch (e) {
+            console.error('QStash 서명 검증 실패:', e.message);
+            return res.status(401).json({ error: '서명 검증 실패 — 요청이 거부되었습니다.' });
+        }
+    }
 
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
     const { taskId, productId, productName, newStatus, newIsDisplayed, token, refreshToken: refreshTokenValue, communityId, exactExecuteAt, currentStatus, currentIsDisplayed, sellerId } = body;
