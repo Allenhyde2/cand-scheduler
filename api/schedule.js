@@ -106,7 +106,6 @@ export default async function handler(req, res) {
                     currentStatus,
                     currentIsDisplayed,
                     sellerId: sellerId || '',
-                    refreshToken: refreshToken || '',
                     status: 'PENDING'
                 }
             }));
