@@ -47,6 +47,18 @@ const GlobalStyles = () => (
       100% { opacity: 1; transform: translateY(0); }
     }
     .animate-fade-in-fast { animation: fadeInFast 0.2s ease-out forwards; }
+
+    @keyframes taskCompleteIn {
+      0% { opacity: 0; transform: scale(0.97); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    @keyframes taskSlideOut {
+      0% { opacity: 1; max-height: 120px; margin-bottom: 12px; transform: scale(1); }
+      100% { opacity: 0; max-height: 0; margin-bottom: 0; transform: scale(0.95); overflow: hidden; }
+    }
+    .task-complete-in { animation: taskCompleteIn 0.3s ease-out forwards; }
+    .task-slide-out { animation: taskSlideOut 0.5s 2s ease-in forwards; }
+    .task-failed-in { animation: taskCompleteIn 0.3s ease-out forwards; }
   `}} />
 );
 
@@ -403,6 +415,9 @@ export default function App() {
   const [historyLogs, setHistoryLogs] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [scheduleSubTab, setScheduleSubTab] = useState('creator'); // 'creator' | 'history'
+  const [taskResults, setTaskResults] = useState({});
+  const [removingTasks, setRemovingTasks] = useState(new Set());
+  const pollTimersRef = useRef(new Map());
 
   const getAuthHeaders = (currentToken) => ({
     'content-type': 'application/json',
@@ -485,6 +500,101 @@ export default function App() {
       setIsLoadingHistory(false);
     }
   };
+
+  const checkTaskResults = async (taskIds) => {
+    try {
+      const currentToken = await getValidToken();
+      const res = await fetch(SCHEDULER_API_URL, {
+        method: 'POST',
+        headers: getAuthHeaders(currentToken),
+        body: JSON.stringify({ action: 'HISTORY', token: currentToken, communityId })
+      });
+      if (!res.ok) return {};
+      const data = await res.json();
+      const logs = data.logs || [];
+      const results = {};
+      taskIds.forEach(tid => {
+        const match = logs.find(l => l.taskId === tid && (l.status === 'SUCCESS' || l.status === 'FAILED'));
+        if (match) results[tid] = { success: match.success, message: match.message || '' };
+      });
+      return results;
+    } catch { return {}; }
+  };
+
+  useEffect(() => {
+    if (!isAuthenticated || tasks.length === 0) return;
+    const timers = pollTimersRef.current;
+    const now = Date.now();
+
+    const pendingTasks = tasks.filter(t =>
+      t.status === 'cloud_scheduled' && !taskResults[t.id] && !removingTasks.has(t.id)
+    );
+    if (pendingTasks.length === 0) return;
+
+    const groups = new Map();
+    pendingTasks.forEach(t => {
+      const key = Math.floor(t.executeAt / 1000);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(t);
+    });
+
+    groups.forEach((groupTasks, timeKey) => {
+      if (timers.has(timeKey)) return;
+
+      const executeMs = timeKey * 1000;
+      const delay = Math.max(executeMs - now + 1000, 0);
+
+      const timerId = setTimeout(async () => {
+        const taskIds = groupTasks.map(t => t.id);
+        const results = await checkTaskResults(taskIds);
+        const found = Object.keys(results);
+
+        if (found.length > 0) {
+          setTaskResults(prev => ({ ...prev, ...results }));
+          fetchHistoryLogs(token);
+        }
+
+        const missing = taskIds.filter(id => !results[id]);
+        if (missing.length > 0) {
+          setTimeout(async () => {
+            const retryResults = await checkTaskResults(missing);
+            if (Object.keys(retryResults).length > 0) {
+              setTaskResults(prev => ({ ...prev, ...retryResults }));
+              fetchHistoryLogs(token);
+            }
+            timers.delete(timeKey);
+          }, 3000);
+        } else {
+          timers.delete(timeKey);
+        }
+      }, delay);
+
+      timers.set(timeKey, timerId);
+    });
+
+    return () => {
+      timers.forEach(id => clearTimeout(id));
+      timers.clear();
+    };
+  }, [tasks, isAuthenticated]);
+
+  useEffect(() => {
+    const completedIds = Object.keys(taskResults).filter(id => taskResults[id]?.success);
+    if (completedIds.length === 0) return;
+
+    const timers = completedIds.map(id => {
+      if (removingTasks.has(id)) return null;
+      setRemovingTasks(prev => new Set([...prev, id]));
+
+      return setTimeout(() => {
+        setTasks(prev => prev.filter(t => t.id !== id));
+        setTaskResults(prev => { const next = { ...prev }; delete next[id]; return next; });
+        setRemovingTasks(prev => { const next = new Set(prev); next.delete(id); return next; });
+      }, 2500);
+    });
+
+    return () => timers.forEach(t => t && clearTimeout(t));
+  }, [taskResults]);
 
   useEffect(() => {
     const updateIndicator = () => {
@@ -1823,31 +1933,71 @@ export default function App() {
                       <button onClick={() => fetchScheduledTasks(token)} className={glassButtonSecondary}>갱신</button>
                     </div>
                     <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-2">
-                      {displayedTasks.map(t => (
-                        <div key={t.id} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white transition-all group">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{t.productName}</p>
-                              <p className="text-[10px] text-slate-400 font-bold mt-1">{new Date(t.executeAt).toLocaleString()}</p>
+                      {displayedTasks.map(t => {
+                        const result = taskResults[t.id];
+                        const isRemoving = removingTasks.has(t.id);
+
+                        if (result) {
+                          return (
+                            <div key={t.id} className={`p-4 rounded-2xl shadow-sm border transition-all ${result.success
+                              ? `bg-green-50 border-green-300 ${isRemoving ? 'task-slide-out' : 'task-complete-in'}`
+                              : 'bg-red-50 border-red-300 task-failed-in'
+                            }`}>
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${result.success ? 'bg-green-500' : 'bg-red-500'}`}>
+                                  <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    {result.success
+                                      ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path>
+                                      : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12"></path>
+                                    }
+                                  </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className={`font-extrabold text-sm ${result.success ? 'text-green-700' : 'text-red-700'}`}>
+                                    {t.productName}
+                                  </p>
+                                  <p className={`text-xs font-bold mt-0.5 ${result.success ? 'text-green-600' : 'text-red-600'}`}>
+                                    {result.success ? '상태 변경 완료' : `실패: ${result.message || '알 수 없는 오류'}`}
+                                  </p>
+                                </div>
+                                {!result.success && (
+                                  <button onClick={() => {
+                                    setTaskResults(prev => { const next = { ...prev }; delete next[t.id]; return next; });
+                                  }} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <div className="flex gap-2 shrink-0">
-                              <button onClick={() => openEditModal(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.edit}`}>수정</button>
-                              <button onClick={() => handleDeleteTask(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.delete}`}>삭제</button>
+                          );
+                        }
+
+                        return (
+                          <div key={t.id} className="p-4 bg-white/50 border border-white/60 shadow-sm rounded-2xl hover:bg-white transition-all group">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="font-extrabold text-slate-800 group-hover:text-blue-600 transition-colors">{t.productName}</p>
+                                <p className="text-[10px] text-slate-400 font-bold mt-1">{new Date(t.executeAt).toLocaleString()}</p>
+                              </div>
+                              <div className="flex gap-2 shrink-0">
+                                <button onClick={() => openEditModal(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.edit}`}>수정</button>
+                                <button onClick={() => handleDeleteTask(t)} className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-sm ${colorVariants.delete}`}>삭제</button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="mt-2 flex items-center gap-2 text-xs font-bold">
-                            {t.currentStatus ? (
-                              <>
-                                <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(t.currentStatus)} · {t.currentIsDisplayed ? '진열' : '숨김'}</span>
-                                <span className="text-slate-300">→</span>
+                            <div className="mt-2 flex items-center gap-2 text-xs font-bold">
+                              {t.currentStatus ? (
+                                <>
+                                  <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-500">{translateStatus(t.currentStatus)} · {t.currentIsDisplayed ? '진열' : '숨김'}</span>
+                                  <span className="text-slate-300">→</span>
+                                  <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
+                                </>
+                              ) : (
                                 <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
-                              </>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-600 border border-blue-200">{translateStatus(t.newStatus)} · {t.newIsDisplayed ? '진열' : '숨김'}</span>
-                            )}
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {displayedTasks.length === 0 && !isLoading && <div className="py-20 text-center text-slate-300 font-bold">등록된 예약 정보가 없습니다.</div>}
                     </div>
                   </div>
